@@ -4,8 +4,8 @@ milestone: v0.1.0
 milestone_name: milestone
 status: executing
 stopped_at: Roadmap created and traceability populated; Phase 1 ready for `/gsd-plan-phase 1`
-last_updated: "2026-05-03T05:38:15.408Z"
-last_activity: 2026-05-03 -- Phase 1 planning complete
+last_updated: "2026-05-03T06:05:50.141Z"
+last_activity: 2026-05-03 -- Phase 01 execution started
 progress:
   total_phases: 7
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 1 — Foundations & Skeleton
+**Current focus:** Phase 01 — foundations-skeleton
 
 ## Current Position
 
-Phase: 1 of 7 (Foundations & Skeleton)
-Plan: 0 of TBD in current phase
-Status: Ready to execute
-Last activity: 2026-05-03 -- Phase 1 planning complete
+Phase: 01 (foundations-skeleton) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 01
+Last activity: 2026-05-03 -- Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

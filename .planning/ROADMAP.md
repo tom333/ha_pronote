@@ -36,8 +36,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 5 plans
 Plans:
 **Wave 1**
-- [ ] 01-01-PLAN.md — Repo bootstrap: pyproject.toml + ruff/pyright/pytest config, requirements_test.txt, package.json, .gitignore, LICENSE, README.md (Wave 1, DIST-08)
-- [ ] 01-02-PLAN.md — Integration skeleton: manifest.json, hacs.json, __init__.py, const.py, placeholder config_flow.py, strings.json (Wave 1, DIST-01 + DIST-02)
+- [x] 01-01-PLAN.md — Repo bootstrap: pyproject.toml + ruff/pyright/pytest config, requirements_test.txt, package.json, .gitignore, LICENSE, README.md (Wave 1, DIST-08)
+- [x] 01-02-PLAN.md — Integration skeleton: manifest.json, hacs.json, __init__.py, const.py, placeholder config_flow.py, strings.json (Wave 1, DIST-01 + DIST-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-03-PLAN.md — Test scaffolding: tests/__init__.py, tests/conftest.py (PHACC autouse), tests/test_init.py, tests/test_manifest.py (Wave 2, DIST-08)
