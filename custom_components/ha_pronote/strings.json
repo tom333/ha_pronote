@@ -1,0 +1,7 @@
+{
+  "config": {
+    "abort": {
+      "not_implemented": "HA-Pronote is in early development. Account setup will be available in a future release."
+    }
+  }
+}
