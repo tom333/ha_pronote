@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v0.1.0
+milestone_name: milestone
+status: planning
+stopped_at: Roadmap created and traceability populated; Phase 1 ready for `/gsd-plan-phase 1`
+last_updated: "2026-05-03T04:24:30.503Z"
+last_activity: 2026-05-03 — Roadmap created from research-proposed 7-phase structure
+progress:
+  total_phases: 7
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+---
+
 # Project State
 
 ## Project Reference
@@ -19,6 +35,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: —
 - Total execution time: 0.0 hours
@@ -30,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 **Recent Trend:**
+
 - Last 5 plans: —
 - Trend: —
 
@@ -56,6 +74,7 @@ None yet.
 ### Blockers/Concerns
 
 None yet. Two known research gaps to spike during the relevant phase:
+
 - Phase 5: NC vice-rectorat school-calendar machine-readable format (ICS? JSON?) — fallback is hardcoded JSON for v1
 - Phase 4: `bain3#311` cancellation-vs-room-change exact semantics under current pronotepy version — needs targeted research with real fixtures
 
