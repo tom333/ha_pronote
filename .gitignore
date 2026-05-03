@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Phase 1 additions
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.local/
+node_modules/
+*.zip
