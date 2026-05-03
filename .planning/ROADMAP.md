@@ -40,9 +40,9 @@ Plans:
 - [x] 01-02-PLAN.md — Integration skeleton: manifest.json, hacs.json, __init__.py, const.py, placeholder config_flow.py, strings.json (Wave 1, DIST-01 + DIST-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 01-03-PLAN.md — Test scaffolding: tests/__init__.py, tests/conftest.py (PHACC autouse), tests/test_init.py, tests/test_manifest.py (Wave 2, DIST-08)
-- [ ] 01-04-PLAN.md — CI workflows: .github/workflows/{lint,validate,test,release}.yml with SHA-pinned actions (Wave 2, DIST-03)
-- [ ] 01-05-PLAN.md — Local devloop: .devcontainer.json + .pre-commit-config.yaml mirroring CI (Wave 2, DIST-08)
+- [x] 01-03-PLAN.md — Test scaffolding: tests/__init__.py, tests/conftest.py (PHACC autouse), tests/test_init.py, tests/test_manifest.py (Wave 2, DIST-08)
+- [x] 01-04-PLAN.md — CI workflows: .github/workflows/{lint,validate,test,release}.yml with SHA-pinned actions (Wave 2, DIST-03)
+- [x] 01-05-PLAN.md — Local devloop: .devcontainer.json + .pre-commit-config.yaml mirroring CI (Wave 2, DIST-08)
 
 **Cross-cutting constraints:**
 - D-28: codespell ships from Phase 1 for FR/EN docstring spell-check
