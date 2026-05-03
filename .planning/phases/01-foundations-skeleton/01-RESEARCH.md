@@ -1297,27 +1297,31 @@ See [LICENSE](LICENSE).
 
 **No critical assumptions.** All structural and version-related claims are [VERIFIED] or [CITED]. The five items above are project-style choices that can be deferred to user confirmation in `/gsd-discuss-phase` follow-up if desired.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `LICENSE` ship in Phase 1 or be deferred?**
    - What we know: HA / HACS does not require a LICENSE file at the repo root for `hacs/action` to pass. PROJECT.md does not specify a license. CLAUDE.md does not specify.
    - What's unclear: User's preferred license.
    - Recommendation: Ship `LICENSE` (MIT default) in Phase 1 because the placeholder README.md links to it. Trivial to change later; opening the repo without a LICENSE creates a small legal ambiguity for early contributors.
+   - **RESOLVED:** Ship MIT `LICENSE` in Phase 1 with copyright `2026 Thomas Guyader`. Implemented in plan `01-01` (Repo bootstrap), Task 3.
 
 2. **Should the Phase 1 README.md include a HACS install button (one-click "Add custom repository")?**
    - What we know: HACS supports a "My Home Assistant" deep-link that pre-fills the custom-repository dialog. Pattern: `https://my.home-assistant.io/redirect/hacs_repository/?owner=tom333&repository=ha-pronote&category=integration`.
    - What's unclear: Whether the user wants this UX in v0.0.1 (pre-functional) or only at v0.1.0 release.
    - Recommendation: SKIP the deep-link in Phase 1 (avoids user confusion when they install something that doesn't yet do anything). Add in Phase 7 with the full README.
+   - **RESOLVED:** Defer to Phase 7 (DIST-07 full README). Phase 1 ships a minimal placeholder README with no install button. Implemented in plan `01-01`, Task 3.
 
 3. **Branch protection: enforce on `main` from Phase 1?**
    - What we know: GitHub branch protection isn't an artifact in the repo (it's a GitHub setting). It's not part of the Phase 1 scope per CONTEXT.md.
    - What's unclear: Whether the user wants the planner to include "configure branch protection" as a manual task in PLAN.md.
    - Recommendation: Yes, include as a manual setup step at the end of Phase 1's plan. Without it, the CI gates can be bypassed by direct push.
+   - **RESOLVED:** Include as an explicit `checkpoint:user-action` task in plan `01-04` (CI workflows) tail and document under Manual-Only Verifications in `01-VALIDATION.md`. Without it, DIST-03's "blocks merge" success criterion is unenforced.
 
 4. **Will hassfest 2026.4.x reject `quality_scale: bronze` if there are no entities yet?**
    - What we know: hassfest manifest.py [VERIFIED L390-401] only enforces additional rules for `silver` and above (codeowner check). `bronze` passes the base manifest schema.
    - What's unclear: Whether the underlying `quality_scale` rule files (`script/hassfest/quality_scale.py` — not inspected this session) impose entity-existence checks.
    - Recommendation: Phase 1 plan MUST include a CI smoke run on a feature branch before declaring Phase 1 complete. If hassfest emits a `bronze`-related warning we didn't anticipate, the planner has the option to drop `quality_scale` from manifest.json (it's optional) and re-add in Phase 7 alongside the proper Bronze checklist. Document this fork as a Phase 1 contingency.
+   - **RESOLVED:** Treat as a contingency — keep `quality_scale: bronze` in Phase 1 manifest. If hassfest surfaces an entity-existence rule on the feature-branch CI smoke run, plan `01-02` permits dropping the field and re-adding in Phase 7 alongside the Bronze checklist. Documented in plan `01-02` task notes.
 
 ## Environment Availability
 

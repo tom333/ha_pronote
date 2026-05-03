@@ -2,12 +2,14 @@
 phase: 1
 slug: foundations-skeleton
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-03
 ---
 
 # Phase 1 — Validation Strategy
+
+> Phase 1 absorbs Wave 0 artifact creation inside its own plans (greenfield bootstrap) — the per-task table's "created in plan 01-NN" marker is the proof.
 
 > Per-phase validation contract for feedback sampling during execution.
 > Source of truth: `01-RESEARCH.md` §Validation Architecture.
@@ -43,12 +45,13 @@ created: 2026-05-03
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 01-{P}-{T} | repo-skeleton | 1 | DIST-01 | — | manifest.json + hacs.json present and valid | smoke (CI) | `validate.yml` runs `home-assistant/actions/hassfest@<sha>` + `hacs/action@<sha>` | ❌ W0 | ⬜ pending |
-| 01-{P}-{T} | repo-skeleton | 1 | DIST-02 | T-1-pin | manifest declares `iot_class=cloud_polling`, `quality_scale=bronze`, runtime requirements pinned | unit | `pytest tests/test_manifest.py -x` | ❌ W0 | ⬜ pending |
-| 01-{P}-{T} | ci-workflows | 2 | DIST-03 | T-1-sha | every PR runs lint+validate+test and blocks merge on failure | integration (CI) | branch protection observable on a real PR | ❌ W0 (manual) | ⬜ pending |
-| 01-{P}-{T} | tooling-uv | 1 | DIST-08 | — | `uv pip install -r requirements_test.txt && uv run pytest` from clean checkout green | smoke (local + CI) | `pytest -q` exits 0 | ❌ W0 | ⬜ pending |
-| 01-{P}-{T} | tooling-uv | 1 | phase-contract | — | `DOMAIN == "ha_pronote"` (folder ↔ manifest match) | unit | `pytest tests/test_init.py::test_domain_constant_is_ha_pronote -x` | ❌ W0 | ⬜ pending |
-| 01-{P}-{T} | tooling-uv | 1 | phase-contract | — | placeholder ConfigFlow `async_step_user` aborts cleanly with `reason=not_implemented` | integration (uses `hass` fixture) | `pytest tests/test_init.py::test_config_flow_placeholder_aborts -x` | ❌ W0 | ⬜ pending |
+| 01-{P}-{T} | repo-skeleton | 1 | DIST-01 | — | manifest.json + hacs.json present and valid | smoke (CI) | `validate.yml` runs `home-assistant/actions/hassfest@<sha>` + `hacs/action@<sha>` | ⏳ created in plan 01-02 | ⬜ pending |
+| 01-{P}-{T} | repo-skeleton | 1 | DIST-02 | T-1-pin | manifest declares `iot_class=cloud_polling`, `quality_scale=bronze`, runtime requirements pinned | unit | `pytest tests/test_manifest.py -x` | ⏳ created in plan 01-02 | ⬜ pending |
+| 01-{P}-{T} | ci-workflows | 2 | DIST-03 | T-1-sha | every PR runs lint+validate+test and blocks merge on failure | integration (CI) | branch protection observable on a real PR | ⏳ created in plan 01-04 (workflows + 01-04-04 checkpoint) | ⬜ pending |
+| 01-04-04 | ci-workflows | 2 | DIST-03 | T-1-sha | branch protection on `main` requires Lint+Validate+Test status checks; admin bypass disabled | manual | `gh api repos/tom333/ha-pronote/branches/main/protection --jq '.required_status_checks.contexts'` | n/a (manual operator action) | ⬜ pending |
+| 01-{P}-{T} | tooling-uv | 1 | DIST-08 | — | `uv pip install -r requirements_test.txt && uv run pytest` from clean checkout green | smoke (local + CI) | `pytest -q` exits 0 | ⏳ created in plan 01-01 (pyproject) + 01-03 (tests) | ⬜ pending |
+| 01-{P}-{T} | tooling-uv | 1 | phase-contract | — | `DOMAIN == "ha_pronote"` (folder ↔ manifest match) | unit | `pytest tests/test_init.py::test_domain_constant_is_ha_pronote -x` | ⏳ created in plan 01-02 (const.py) + 01-03 (test) | ⬜ pending |
+| 01-{P}-{T} | tooling-uv | 1 | phase-contract | — | placeholder ConfigFlow `async_step_user` aborts cleanly with `reason=not_implemented` | integration (uses `hass` fixture) | `pytest tests/test_init.py::test_config_flow_placeholder_aborts -x` | ⏳ created in plan 01-02 (config_flow.py) + 01-03 (test) | ⬜ pending |
 
 ---
 
@@ -80,11 +83,11 @@ created: 2026-05-03
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending

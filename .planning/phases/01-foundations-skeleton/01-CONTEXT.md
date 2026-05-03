@@ -23,7 +23,7 @@ A HACS-installable empty integration shell for HA-Pronote that:
 
 ### Integration Identity
 - **D-01:** `manifest.json:domain = "ha_pronote"` (underscore). FROZEN — changing after first real install breaks `.storage/<domain>.config_entries` and all entity_ids. Rationale: aligns with DIST-09 zip naming `ha_pronote.zip`, no collision with `delphiki/hass-pronote` (uses `pronote`), so a user who tried delphiki can install both side-by-side or migrate cleanly.
-- **D-02:** `unique_id` pattern stays `pronote_{child_identifier}_{sensor_kind}` per ENT-02 (REQUIREMENTS.md). Independent from `domain`. Keeps user-facing entity_ids short (`sensor.pronote_alice_grades`) while folder/manifest use the disambiguated `ha_pronote`.
+- **D-02 [informational]:** `unique_id` pattern stays `pronote_{child_identifier}_{sensor_kind}` per ENT-02 (REQUIREMENTS.md). Independent from `domain`. Keeps user-facing entity_ids short (`sensor.pronote_alice_grades`) while folder/manifest use the disambiguated `ha_pronote`. *(Phase 3 concern — Phase 1 ships no entities.)*
 - **D-03:** GitHub repo: `https://github.com/tom333/ha-pronote` (hyphen). Repo name uses hyphen (GitHub convention), Python package uses underscore (`custom_components/ha_pronote/`). HACS handles the mismatch transparently.
 - **D-04:** `manifest.json` codeowner = `["@tom333"]`.
 - **D-05:** `manifest.json:documentation = "https://github.com/tom333/ha-pronote"`.
@@ -50,14 +50,14 @@ A HACS-installable empty integration shell for HA-Pronote that:
   2. `sed`-replace `"version": "..."` in `custom_components/ha_pronote/manifest.json` with `${{ github.event.release.tag_name }}`
   3. `cd custom_components/ha_pronote && zip -r ../../ha_pronote.zip .`
   4. `softprops/action-gh-release@<sha>` to attach `ha_pronote.zip` as release asset
-- **D-19:** Conventional Commits encouraged but NOT enforced in v1. Migration to `release-please` left as v2+ option. Satisfies DIST-09.
+- **D-19 [informational]:** Conventional Commits encouraged but NOT enforced in v1. Migration to `release-please` left as v2+ option. Satisfies DIST-09. *(Negative decision — nothing to enforce; documented non-policy.)*
 
 ### CI Workflows (Locked from DIST-03)
 - **D-20:** `.github/workflows/lint.yml` runs on `pull_request` and `push`: `ruff format --check`, `ruff check`, `pyright`, `codespell`. Uses `astral-sh/setup-uv@v8` + `uv pip install -r requirements_test.txt` (cached on `requirements*.txt` hash). Pyright via `npx pyright` (npm install in step) — matches `jpawlowski` blueprint.
 - **D-21:** `.github/workflows/validate.yml` runs on `pull_request` and `push`: `home-assistant/actions/hassfest@<sha> # master` + `hacs/action@<sha> # main` with `category: integration` and `ignore: brands` (no brand assets in v1; brand submission deferred to v2+ per CLAUDE.md "What NOT to Use" guidance on `hacs/action`).
 - **D-22:** `.github/workflows/test.yml` runs on `pull_request` and `push`: `uv pip install -r requirements_test.txt`, then `pytest -q`. Phase 1 has at least one trivial test (smoke test) so the workflow has something to assert.
 - **D-23:** GitHub Actions pinned by SHA, NOT by tag. Tags on `home-assistant/actions` (`1.0.0`, 2020) and `hacs/action` (`22.5.0`, 2022) are stale; community pins by SHA on `master`/`main`. Renovate/dependabot bumps in v2+.
-- **D-24:** Daily cron job against `pronotepy@main` (DIST-04) is OUT OF Phase 1 scope — deferred to Phase 7.
+- **D-24 [deferred]:** Daily cron job against `pronotepy@main` (DIST-04) is OUT OF Phase 1 scope — deferred to Phase 7.
 
 ### Tooling (Locked from CLAUDE.md / DIST-08)
 - **D-25:** `uv` for deps + venv. `uv.lock` committed. `requirements_test.txt` mirrors test deps for HA-style consumption (CI uses `uv pip install -r requirements_test.txt`, NOT `uv sync` — keeps the test workflow path identical to a future contributor's `pip install -r ...` flow if they don't have `uv`).
@@ -70,9 +70,9 @@ A HACS-installable empty integration shell for HA-Pronote that:
 - **D-30:** NO `async_timeout` package — `asyncio.timeout()` (stdlib) when needed in later phases.
 - **D-31:** NO `pytz` — `zoneinfo.ZoneInfo("Pacific/Noumea")` later.
 - **D-32:** NO direct `requests` in our code — only via `pronotepy`.
-- **D-33:** NO ENT modules from `pronotepy.ent` (out of scope per PROJECT.md, would silently bloat bundle).
-- **D-34:** NO hardcoded `katiramona.ac-noumea.nc` URL — Config Flow text field with `voluptuous.Url()` validator (Phase 3 concern, but lock the principle now).
-- **D-35:** NO monkey-patching of `pronotepy` in our component (CLAUDE.md "What NOT to Use") — open issues at `bain3/pronotepy` instead.
+- **D-33 [informational]:** NO ENT modules from `pronotepy.ent` (out of scope per PROJECT.md, would silently bloat bundle). *(Phase 3+ owns this in practice — Phase 1 has no pronotepy imports.)*
+- **D-34 [informational]:** NO hardcoded `katiramona.ac-noumea.nc` URL — Config Flow text field with `voluptuous.Url()` validator (Phase 3 concern, but lock the principle now). *(Phase 1's placeholder ConfigFlow has zero URL handling.)*
+- **D-35 [informational]:** NO monkey-patching of `pronotepy` in our component (CLAUDE.md "What NOT to Use") — open issues at `bain3/pronotepy` instead. *(Phase 1 has no pronotepy imports.)*
 
 ### Claude's Discretion
 The user delegated three sub-decisions to the planner. Recommended defaults to apply unless planner finds a stronger argument:

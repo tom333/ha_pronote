@@ -33,7 +33,19 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Every PR runs `hassfest` + `hacs/action` + `ruff` + `pyright` + `pytest` in GitHub Actions and blocks merge on any failure
   3. Local dev workflow works: `uv sync && uv run pytest` from a clean checkout green-passes
   4. `manifest.json` declares `iot_class: cloud_polling`, `quality_scale: bronze`, `pronotepy>=2.14,<3.0`, codeowners, and issue tracker — `hassfest` validates clean
-**Plans**: TBD
+**Plans:** 5 plans
+Plans:
+**Wave 1**
+- [ ] 01-01-PLAN.md — Repo bootstrap: pyproject.toml + ruff/pyright/pytest config, requirements_test.txt, package.json, .gitignore, LICENSE, README.md (Wave 1, DIST-08)
+- [ ] 01-02-PLAN.md — Integration skeleton: manifest.json, hacs.json, __init__.py, const.py, placeholder config_flow.py, strings.json (Wave 1, DIST-01 + DIST-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 01-03-PLAN.md — Test scaffolding: tests/__init__.py, tests/conftest.py (PHACC autouse), tests/test_init.py, tests/test_manifest.py (Wave 2, DIST-08)
+- [ ] 01-04-PLAN.md — CI workflows: .github/workflows/{lint,validate,test,release}.yml with SHA-pinned actions (Wave 2, DIST-03)
+- [ ] 01-05-PLAN.md — Local devloop: .devcontainer.json + .pre-commit-config.yaml mirroring CI (Wave 2, DIST-08)
+
+**Cross-cutting constraints:**
+- D-28: codespell ships from Phase 1 for FR/EN docstring spell-check
 **UI hint**: no
 
 ### Phase 2: API & Diff Layer (HA-free)
@@ -116,7 +128,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations & Skeleton | 0/TBD | Not started | - |
+| 1. Foundations & Skeleton | 0/5 | Planned | - |
 | 2. API & Diff Layer | 0/TBD | Not started | - |
 | 3. Coordinator & First Sensor | 0/TBD | Not started | - |
 | 4. Diff, Events & Full Sensor Suite | 0/TBD | Not started | - |
