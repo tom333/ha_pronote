@@ -147,13 +147,75 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (filled by roadmapper) | | |
+| AUTH-01 | Phase 3 | Pending |
+| AUTH-02 | Phase 3 | Pending |
+| AUTH-03 | Phase 6 | Pending |
+| AUTH-04 | Phase 3 | Pending |
+| AUTH-05 | Phase 6 | Pending |
+| AUTH-06 | Phase 6 | Pending |
+| AUTH-07 | Phase 3 | Pending |
+| COORD-01 | Phase 3 | Pending |
+| COORD-02 | Phase 3 | Pending |
+| COORD-03 | Phase 6 | Pending |
+| COORD-04 | Phase 5 | Pending |
+| COORD-05 | Phase 5 | Pending |
+| COORD-06 | Phase 5 | Pending |
+| COORD-07 | Phase 5 | Pending |
+| COORD-08 | Phase 5 | Pending |
+| COORD-09 | Phase 5 | Pending |
+| TIME-01 | Phase 3 | Pending |
+| TIME-02 | Phase 4 | Pending |
+| TIME-03 | Phase 4 | Pending |
+| TIME-04 | Phase 2 | Pending |
+| GRADE-01 | Phase 4 | Pending |
+| GRADE-02 | Phase 4 | Pending |
+| GRADE-03 | Phase 4 | Pending |
+| NOTIF-01 | Phase 4 | Pending |
+| NOTIF-02 | Phase 4 | Pending |
+| CAL-01 | Phase 4 | Pending |
+| CAL-02 | Phase 4 | Pending |
+| EVENT-01 | Phase 4 | Pending |
+| EVENT-02 | Phase 4 | Pending |
+| EVENT-03 | Phase 4 | Pending |
+| EVENT-04 | Phase 4 | Pending |
+| EVENT-05 | Phase 2 | Pending |
+| ENT-01 | Phase 4 | Pending |
+| ENT-02 | Phase 3 | Pending |
+| ENT-03 | Phase 3 | Pending |
+| ENT-04 | Phase 3 | Pending |
+| DIAG-01 | Phase 7 | Pending |
+| DIAG-02 | Phase 7 | Pending |
+| DIAG-03 | Phase 7 | Pending |
+| OPT-01 | Phase 6 | Pending |
+| OPT-02 | Phase 6 | Pending |
+| OPT-03 | Phase 6 | Pending |
+| OPT-04 | Phase 6 | Pending |
+| I18N-01 | Phase 7 | Pending |
+| I18N-02 | Phase 7 | Pending |
+| DIST-01 | Phase 1 | Pending |
+| DIST-02 | Phase 1 | Pending |
+| DIST-03 | Phase 1 | Pending |
+| DIST-04 | Phase 7 | Pending |
+| DIST-05 | Phase 2 | Pending |
+| DIST-06 | Phase 5 | Pending |
+| DIST-07 | Phase 7 | Pending |
+| DIST-08 | Phase 1 | Pending |
+| DIST-09 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 47 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 47 ⚠️
+- v1 requirements: 54 total
+- Mapped to phases: 54
+- Unmapped: 0
+
+**Per-Phase Counts:**
+- Phase 1 (Foundations): 4 (DIST-01, DIST-02, DIST-03, DIST-08)
+- Phase 2 (API & Diff): 3 (TIME-04, EVENT-05, DIST-05)
+- Phase 3 (Coordinator + First Sensor): 10 (AUTH-01, AUTH-02, AUTH-04, AUTH-07, COORD-01, COORD-02, TIME-01, ENT-02, ENT-03, ENT-04)
+- Phase 4 (Diff, Events & Full Sensor Suite): 14 (TIME-02, TIME-03, GRADE-01, GRADE-02, GRADE-03, NOTIF-01, NOTIF-02, CAL-01, CAL-02, EVENT-01, EVENT-02, EVENT-03, EVENT-04, ENT-01)
+- Phase 5 (Politesse): 7 (COORD-04, COORD-05, COORD-06, COORD-07, COORD-08, COORD-09, DIST-06)
+- Phase 6 (Auth Lifecycle & Options): 8 (AUTH-03, AUTH-05, AUTH-06, COORD-03, OPT-01, OPT-02, OPT-03, OPT-04)
+- Phase 7 (Quality, Diagnostics & Distribution): 8 (DIAG-01, DIAG-02, DIAG-03, I18N-01, I18N-02, DIST-04, DIST-07, DIST-09)
 
 ---
 *Requirements defined: 2026-05-03*
-*Last updated: 2026-05-03 after initial definition*
+*Last updated: 2026-05-03 — traceability filled by roadmapper (54/54 mapped, 7 phases)*
