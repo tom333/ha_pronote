@@ -14,7 +14,10 @@ L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours es
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — ship to validate)
+**From Phase 1 — Foundations & Skeleton (2026-05-03)**
+- [x] Structure conforme HACS custom repository (manifest.json, hacs.json) — *Validated in Phase 1: 01-02 integration skeleton; D-01 frozen invariant*
+- [x] CI GitHub Actions (lint, tests, validation HACS) — *Partially validated in Phase 1: 01-04 ships lint/validate/test/release workflows SHA-pinned; branch protection on `main` deferred to first push (HUMAN-UAT #4)*
+- [x] Test harness foundation (unit + integration via PHACC) — *Validated in Phase 1: 01-03 ships pytest + PHACC fixture wiring + manifest contract regression test; production tests grow per-feature in subsequent phases*
 
 ### Active
 
@@ -51,8 +54,6 @@ L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours es
 **Qualité & Distribution**
 - [ ] Tests unitaires (logique alertes, parsing, comparaison EDT)
 - [ ] Tests d'intégration avec mock pronotepy
-- [ ] CI GitHub Actions (lint, tests, validation HACS)
-- [ ] Structure conforme HACS custom repository (manifest.json, hacs.json)
 - [ ] Documentation README installation + configuration
 
 ### Out of Scope
@@ -91,7 +92,7 @@ L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours es
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| From scratch (pas fork de l'existant) | Architecture DataUpdateCoordinator propre dès le départ + meilleure gestion alertes EDT (point critique) | — Pending |
+| From scratch (pas fork de l'existant) | Architecture DataUpdateCoordinator propre dès le départ + meilleure gestion alertes EDT (point critique) | Confirmed in Phase 1 — buildable HACS-conformant skeleton shipped without forking |
 | Devoirs en v2 | Réduit scope MVP, ship plus rapide ; notes + EDT + notifs couvrent le cas critique | — Pending |
 | Auth Pronote directe seulement (pas ENT) en v1 | Cas d'usage personnel = `ac-noumea.nc` sans ENT ; ENT ajouterait complexité disproportionnée | — Pending |
 | HACS custom repository (pas default) en v1 | Pas de friction soumission, itération rapide ; default visé v2+ | — Pending |
@@ -117,4 +118,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-03 after initialization*
+*Last updated: 2026-05-03 after Phase 1 (Foundations & Skeleton) completion — code-side PASSED, 5 operator-action items tracked in `01-HUMAN-UAT.md`*

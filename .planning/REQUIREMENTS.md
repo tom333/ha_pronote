@@ -192,14 +192,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPT-04 | Phase 6 | Pending |
 | I18N-01 | Phase 7 | Pending |
 | I18N-02 | Phase 7 | Pending |
-| DIST-01 | Phase 1 | Pending |
-| DIST-02 | Phase 1 | Pending |
-| DIST-03 | Phase 1 | Pending |
+| DIST-01 | Phase 1 | Implemented |
+| DIST-02 | Phase 1 | Implemented |
+| DIST-03 | Phase 1 | Partial (CI shipped; branch protection deferred until push) |
 | DIST-04 | Phase 7 | Pending |
 | DIST-05 | Phase 2 | Pending |
 | DIST-06 | Phase 5 | Pending |
 | DIST-07 | Phase 7 | Pending |
-| DIST-08 | Phase 1 | Pending |
+| DIST-08 | Phase 1 | Implemented |
 | DIST-09 | Phase 7 | Pending |
 
 **Coverage:**
