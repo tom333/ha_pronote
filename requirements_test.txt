@@ -13,3 +13,6 @@ ruff==0.15.1
 
 # Spell check (matches HA Core master .pre-commit-config.yaml)
 codespell==2.4.1
+
+# D-26: explicit pin (already transitive via PHACC). Hermetic api/ tests.
+requests-mock==1.12.1

@@ -17,3 +17,7 @@ htmlcov/
 .local/
 node_modules/
 *.zip
+
+# Phase 2: real-Pronote spike output (raw + .env)
+.env
+tests/fixtures/real/_raw_*.json

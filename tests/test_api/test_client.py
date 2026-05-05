@@ -1,0 +1,111 @@
+"""Contract tests for api/client.py error mapping (D-21, D-22, Pitfall 1, Pitfall 2)."""
+
+from __future__ import annotations
+
+import pronotepy
+import pytest
+
+from custom_components.ha_pronote.api import AuthError, CommunicationError, ErrorReason, RateLimitedError, build_client
+
+
+def _make_init_raising(exc: BaseException):
+    """Return a replacement ``__init__`` that ignores args and raises ``exc``."""
+
+    def _raise(self, *_args, **_kwargs):
+        raise exc
+
+    return _raise
+
+
+def _make_init_silent():
+    """Return a replacement ``__init__`` that succeeds without HTTP."""
+
+    def _ok(self, *_args, **_kwargs):
+        # Do not call super().__init__() — pronotepy.Client may have parent
+        # init that triggers HTTP; we just want a constructed instance.
+        return None
+
+    return _ok
+
+
+def test_eleve_account_type_returns_pronotepy_client(monkeypatch):
+    monkeypatch.setattr(pronotepy.Client, "__init__", _make_init_silent())
+    monkeypatch.setattr(pronotepy.ParentClient, "__init__", _make_init_silent())
+    client = build_client("https://example.com/pronote/eleve.html", "eleve", "u", "p")
+    assert isinstance(client, pronotepy.Client)
+    assert not isinstance(client, pronotepy.ParentClient)
+
+
+def test_parent_account_type_returns_parent_client(monkeypatch):
+    monkeypatch.setattr(pronotepy.Client, "__init__", _make_init_silent())
+    monkeypatch.setattr(pronotepy.ParentClient, "__init__", _make_init_silent())
+    client = build_client("https://example.com/pronote/parent.html", "parent", "u", "p")
+    assert isinstance(client, pronotepy.ParentClient)
+
+
+def test_ip_suspended_message_raises_rate_limited(monkeypatch):
+    monkeypatch.setattr(
+        pronotepy.Client,
+        "__init__",
+        _make_init_raising(pronotepy.PronoteAPIError("Your IP address is suspended")),
+    )
+    with pytest.raises(RateLimitedError) as excinfo:
+        build_client("https://example.com/pronote/eleve.html", "eleve", "u", "p")
+    assert excinfo.value.reason == ErrorReason.IP_SUSPENDED
+
+
+def test_crypto_error_raises_auth_error(monkeypatch):
+    monkeypatch.setattr(
+        pronotepy.Client,
+        "__init__",
+        _make_init_raising(pronotepy.exceptions.CryptoError("Padding error")),
+    )
+    with pytest.raises(AuthError) as excinfo:
+        build_client("https://example.com/pronote/eleve.html", "eleve", "u", "p")
+    assert excinfo.value.reason == ErrorReason.AUTH_FAILED
+
+
+def test_other_pronote_error_raises_communication_error(monkeypatch):
+    monkeypatch.setattr(
+        pronotepy.Client,
+        "__init__",
+        _make_init_raising(pronotepy.PronoteAPIError("Some other failure")),
+    )
+    with pytest.raises(CommunicationError) as excinfo:
+        build_client("https://example.com/pronote/eleve.html", "eleve", "u", "p")
+    assert excinfo.value.reason == ErrorReason.PROTOCOL_BROKEN
+
+
+def test_os_error_raises_communication_error_server_down(monkeypatch):
+    monkeypatch.setattr(
+        pronotepy.Client,
+        "__init__",
+        _make_init_raising(OSError("network unreachable")),
+    )
+    with pytest.raises(CommunicationError) as excinfo:
+        build_client("https://example.com/pronote/eleve.html", "eleve", "u", "p")
+    assert excinfo.value.reason == ErrorReason.SERVER_DOWN
+
+
+def test_communication_error_chains_original_via_from(monkeypatch):
+    original = pronotepy.PronoteAPIError("Some other failure")
+    monkeypatch.setattr(
+        pronotepy.Client,
+        "__init__",
+        _make_init_raising(original),
+    )
+    with pytest.raises(CommunicationError) as excinfo:
+        build_client("https://example.com/pronote/eleve.html", "eleve", "u", "p")
+    assert excinfo.value.__cause__ is original
+
+
+def test_auth_error_chains_original_via_from(monkeypatch):
+    original = pronotepy.exceptions.CryptoError("Padding error")
+    monkeypatch.setattr(
+        pronotepy.Client,
+        "__init__",
+        _make_init_raising(original),
+    )
+    with pytest.raises(AuthError) as excinfo:
+        build_client("https://example.com/pronote/eleve.html", "eleve", "u", "p")
+    assert excinfo.value.__cause__ is original
