@@ -1,6 +1,6 @@
 """Sync facade over pronotepy. HA-free per D-19/D-20.
 
-Caller (Phase 3 coordinator) wraps in ``await hass.async_add_executor_job(partial(...))``.
+Caller (Phase 3 coordinator) wraps each call in ``hass.async_add_executor_job(partial(...))``.
 """
 
 from __future__ import annotations

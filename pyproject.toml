@@ -153,6 +153,13 @@ split-on-trailing-comma = false
     "PLR2004", # Magic values are fine in tests
     "D",       # Docstrings not required in tests
 ]
+"scripts/*" = [
+    "T20",     # print is the script's UX
+    "INP001",  # scripts/ is intentionally not a package
+    "S603",    # subprocess (in case Plan 02-02 adds shell helpers)
+    "S607",
+    "D",       # full docstring set not required for one-shot tools
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 25
