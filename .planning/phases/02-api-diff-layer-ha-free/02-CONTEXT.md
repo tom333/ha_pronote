@@ -191,7 +191,7 @@ None — `/gsd-spec-phase` was not run for Phase 2. Requirements live in REQUIRE
 ### Integration Points
 - **Phase 2 → Phase 3 interface:**
   - `api/client.py:build_client(...)` → consumed by Phase 3's `__init__.py:async_setup_entry` via `await hass.async_add_executor_job(partial(build_client, ...))`.
-  - `api/fetcher.py:fetch_all(client, today, school_tz)` → consumed by Phase 3's `coordinator.py:_async_update_data` via `await hass.async_add_executor_job(partial(fetch_all, client, today=today, school_tz=tz))`.
+  - `api/fetcher.py:fetch_all(client, today, school_tz, child_index_or_identifier=None)` → consumed by Phase 3's `coordinator.py:_async_update_data` via `await hass.async_add_executor_job(partial(fetch_all, client, today=today, school_tz=tz, child_index_or_identifier=child_index))`. The 4th argument is ParentClient-only (D-21, PC-02-03): when set, `client.set_child(...)` runs before any fetch; when None, pronotepy defaults to the first child; ignored for eleve `Client`.
   - `api/errors.py:AuthError / CommunicationError / RateLimitedError` → mapped by Phase 3's coordinator to `ConfigEntryAuthFailed` / `UpdateFailed`.
 - **Phase 2 → Phase 4 interface:**
   - `diff/lessons.py:diff_lessons(previous, new, day) -> list[LessonChange]` → consumed by Phase 4's coordinator `_async_update_data` to fire `pronote_schedule_changed` events. The `LessonChange` dataclass includes a `to_payload() -> dict` method that produces the bus-event-ready dict (per ARCHITECTURE.md Pattern 3 schema).

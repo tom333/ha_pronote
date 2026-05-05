@@ -57,7 +57,21 @@ Plans:
   2. A local CLI script (`scripts/snapshot.py`) authenticates against the author's real Pronote instance via `api.client.build_client` and dumps an anonymized JSON snapshot — proves pronotepy integration works end-to-end before any HA wiring
   3. Diff layer correctly distinguishes a cancellation (lesson canceled=True) from a room change (same identity key, different content key) on captured fixtures from `tests/fixtures/pronote_snapshot_T0.json` → `T1_changed.json`
   4. Diff layer coverage ≥ 90% (CI-enforced) and emits zero events when `previous is None` or when only lesson order changed
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+
+**Wave 1**
+- [ ] 02-01-api-skeleton-and-spike-tooling-PLAN.md — api/ subpackage (errors/models/_strip/client/fetcher) + scripts/snapshot.py + .env.example + tests/test_api/ + tests/test_scripts/ (Wave 1, TIME-04)
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 02-02-real-pronote-spike-PLAN.md — Real-Pronote spike RUN: 3 anonymized fixture pairs (cancellation, room_change, teacher_swap) + SPIKE-FINDINGS-bain3-311.md (Wave 2, EVENT-05; **autonomous: false** — needs human .env + live server)
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 02-03-diff-layer-PLAN.md — diff/ subpackage (events/lessons/grades-stub/notifications-stub) reading SPIKE-FINDINGS + 11 synthetic fixtures + tests/test_diff/ (Wave 3, EVENT-05)
+
+**Wave 4** *(blocked on Wave 3)*
+- [ ] 02-04-tz-matrix-and-coverage-gates-PLAN.md — tests/test_no_ha_imports.py + tests/test_fixtures.py + tz matrix test + pyproject.toml timeout/coverage-omit + .github/workflows/test.yml matrix axis + --cov-fail-under=90 (Wave 4, DIST-05)
+
 **UI hint**: no
 
 ### Phase 3: Coordinator & First Sensor
