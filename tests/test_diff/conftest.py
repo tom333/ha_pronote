@@ -54,10 +54,7 @@ def load_fixture() -> Callable[[str], Snapshot]:
     def _load(name: str) -> Snapshot:
         path = FIXTURE_ROOT / name
         if not path.is_file():
-            pytest.skip(
-                f"fixture {name!r} not found "
-                "(spike may have captured this scenario partially)"
-            )
+            pytest.skip(f"fixture {name!r} not found (spike may have captured this scenario partially)")
         raw = json.loads(path.read_text(encoding="utf-8"))
         return Snapshot.from_dict(raw)
 
@@ -75,10 +72,7 @@ def load_raw_fixture() -> Callable[[str], dict]:
     def _load(name: str) -> dict:
         path = FIXTURE_ROOT / name
         if not path.is_file():
-            pytest.skip(
-                f"fixture {name!r} not found "
-                "(spike may have captured this scenario partially)"
-            )
+            pytest.skip(f"fixture {name!r} not found (spike may have captured this scenario partially)")
         return json.loads(path.read_text(encoding="utf-8"))
 
     return _load

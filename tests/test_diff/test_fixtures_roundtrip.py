@@ -9,8 +9,8 @@ file focuses on what Plan 02-03's diff layer specifically needs.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
+import re
 
 import pytest
 
@@ -34,13 +34,9 @@ EXPECTED_FIXTURES = {
 
 # ISO-8601 datetime with explicit offset, e.g. "2026-05-04T08:00:00+11:00".
 # D-23 forbids naive datetimes in committed fixtures.
-_DATETIME_AWARE_RE = re.compile(
-    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[+-]\d{2}:\d{2}$"
-)
+_DATETIME_AWARE_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[+-]\d{2}:\d{2}$")
 # Naive datetime sentinel: T..:..:.. without an offset before the closing quote.
-_DATETIME_NAIVE_RE = re.compile(
-    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[^+\-Z\d:][^\"]*)?\""
-)
+_DATETIME_NAIVE_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[^+\-Z\d:][^\"]*)?\"")
 
 
 def test_synthetic_directory_holds_exactly_eleven_fixtures():
