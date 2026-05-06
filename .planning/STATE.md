@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1.0
 milestone_name: milestone
 status: executing
-stopped_at: Waves 1+2 of Phase 2 complete (02-01 + 02-02 spike); ready for Wave 3 (02-03 diff layer)
-last_updated: "2026-05-06T12:00:00.000Z"
-last_activity: 2026-05-06 -- Phase 02 wave 2 complete (real-Pronote spike + 3 source fixes)
+stopped_at: Waves 1+2+3 of Phase 2 complete (02-01 + 02-02 spike + 02-03 diff layer); ready for Wave 4 (02-04 TZ matrix + CI gates)
+last_updated: "2026-05-06T13:00:00.000Z"
+last_activity: 2026-05-06 -- Phase 02 wave 3 complete (diff/lessons.py 100% coverage, 134 tests pass)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 8
+  percent: 89
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 02 — api-diff-layer-ha-free (Wave 2/4 complete)
+**Current focus:** Phase 02 — api-diff-layer-ha-free (Wave 3/4 complete)
 
 ## Current Position
 
-Phase: 02 — Waves 1+2 complete (2/4 plans)
-Status: Ready to execute Wave 3 (02-03 diff layer) — autonomous, no user setup needed
-Last activity: 2026-05-06 -- 02-02 real-Pronote spike + 3 source fixes (S-01, S-02, S-03) committed; 74 tests pass
+Phase: 02 — Waves 1+2+3 complete (3/4 plans)
+Status: Ready to execute Wave 4 (02-04 TZ matrix + CI gates) — autonomous
+Last activity: 2026-05-06 -- 02-03 diff layer merged; 134 tests pass + 5 S-04 skips; 100% coverage on diff/lessons.py
 
-Progress: [█████░░░░░] 50%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
