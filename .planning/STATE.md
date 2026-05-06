@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1.0
 milestone_name: milestone
 status: executing
-stopped_at: Waves 1+2+3 of Phase 2 complete (02-01 + 02-02 spike + 02-03 diff layer); ready for Wave 4 (02-04 TZ matrix + CI gates)
-last_updated: "2026-05-06T13:00:00.000Z"
-last_activity: 2026-05-06 -- Phase 02 wave 3 complete (diff/lessons.py 100% coverage, 134 tests pass)
+stopped_at: Phase 2 all 4 plans complete; running phase verification
+last_updated: "2026-05-06T14:00:00.000Z"
+last_activity: 2026-05-06 -- Phase 02 wave 4 complete (TZ matrix + 100% diff coverage CI-locked)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 02 — api-diff-layer-ha-free (Wave 3/4 complete)
+**Current focus:** Phase 02 — api-diff-layer-ha-free (4/4 complete, verifying)
 
 ## Current Position
 
-Phase: 02 — Waves 1+2+3 complete (3/4 plans)
-Status: Ready to execute Wave 4 (02-04 TZ matrix + CI gates) — autonomous
-Last activity: 2026-05-06 -- 02-03 diff layer merged; 134 tests pass + 5 S-04 skips; 100% coverage on diff/lessons.py
+Phase: 02 — All 4 plans complete; running phase verification
+Status: 186 tests pass + 7 S-04 expected skips; 100% diff coverage; all 4 ROADMAP success criteria CI-locked
+Last activity: 2026-05-06 -- 02-04 TZ matrix + coverage gates merged
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 

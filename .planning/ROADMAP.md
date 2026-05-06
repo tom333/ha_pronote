@@ -70,7 +70,7 @@ Plans:
 - [x] 02-03-diff-layer-PLAN.md — diff/ subpackage (events/lessons/grades-stub/notifications-stub) reading SPIKE-FINDINGS + 11 synthetic fixtures + tests/test_diff/ (Wave 3, EVENT-05)
 
 **Wave 4** *(blocked on Wave 3)*
-- [ ] 02-04-tz-matrix-and-coverage-gates-PLAN.md — tests/test_no_ha_imports.py + tests/test_fixtures.py + tz matrix test + pyproject.toml timeout/coverage-omit + .github/workflows/test.yml matrix axis + --cov-fail-under=90 (Wave 4, DIST-05)
+- [x] 02-04-tz-matrix-and-coverage-gates-PLAN.md — tests/test_no_ha_imports.py + tests/test_fixtures.py + tz matrix test + pyproject.toml timeout/coverage-omit + .github/workflows/test.yml matrix axis + --cov-fail-under=90 (Wave 4, DIST-05)
 
 **UI hint**: no
 
@@ -143,7 +143,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations & Skeleton | 5/5 | Complete | 2026-05-03 |
-| 2. API & Diff Layer | 3/4 | In Progress | - |
+| 2. API & Diff Layer | 4/4 | Complete | 2026-05-06 |
 | 3. Coordinator & First Sensor | 0/TBD | Not started | - |
 | 4. Diff, Events & Full Sensor Suite | 0/TBD | Not started | - |
 | 5. Politesse | 0/TBD | Not started | - |
