@@ -83,7 +83,19 @@ Plans:
   2. After HA restart, the entry comes back online without a fresh login (session restored from `client.export_credentials()` stored in `entry.data`); the device named `home-assistant-{entry_id[:8]}` is visible in the user's Pronote app
   3. One sensor `sensor.pronote_<child>_lessons_today` shows a numeric count that refreshes on the configured interval; HA Developer Tools shows zero "Detected blocking call" warnings during a poll
   4. `unique_id` format is `pronote_{child_identifier}_{sensor_kind}` — frozen and documented in code; `async_migrate_entry` skeleton is present (returns True) so future schema changes preserve entity history
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+
+**Wave 1**
+- [ ] 03-01-PLAN.md — Real Config Flow + strings.json (`async_step_user` + `async_step_pick_child` + entry.data D-08 keys + ENT-02 child_identifier freeze) (Wave 1, AUTH-01 + AUTH-02 + ENT-02)
+- [ ] 03-02-PLAN.md — Runtime core: data.py (PronoteData) + coordinator.py (TimestampDataUpdateCoordinator + executor + token capture + silent recovery) + __init__.py (real async_setup_entry/unload/migrate) + const.py append + api/client.py:build_or_resume_client (Wave 1, AUTH-04 + AUTH-07 + COORD-01 + COORD-02 + ENT-04)
+
+**Wave 2** *(blocked on Plan 02)*
+- [ ] 03-03-PLAN.md — entity.py (PronoteEntity base) + sensor.py (PronoteLessonsTodaySensor — state-only, unique_id frozen, mdi:school + MEASUREMENT) (Wave 2, TIME-01 + ENT-02 + ENT-03)
+
+**Wave 3** *(blocked on Plans 01 + 02 + 03)*
+- [ ] 03-04-PLAN.md — Full HA-side test suite: conftest fixtures + test_init extension + test_config_flow + test_coordinator (incl. blocking-call detector for COORD-02/SC#3) + test_sensor + test_token_persistence (Wave 3, all 10 phase req IDs)
+
 **UI hint**: yes
 
 ### Phase 4: Diff, Events & Full Sensor Suite
@@ -144,7 +156,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Foundations & Skeleton | 5/5 | Complete | 2026-05-03 |
 | 2. API & Diff Layer | 4/4 | Complete | 2026-05-06 |
-| 3. Coordinator & First Sensor | 0/TBD | Not started | - |
+| 3. Coordinator & First Sensor | 0/4 | Not started | - |
 | 4. Diff, Events & Full Sensor Suite | 0/TBD | Not started | - |
 | 5. Politesse | 0/TBD | Not started | - |
 | 6. Auth Lifecycle & Options | 0/TBD | Not started | - |
