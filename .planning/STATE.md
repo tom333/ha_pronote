@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 all 4 plans complete; running phase verification
-last_updated: "2026-05-06T14:00:00.000Z"
-last_activity: 2026-05-06 -- Phase 02 wave 4 complete (TZ matrix + 100% diff coverage CI-locked)
+stopped_at: Phase 2 complete (approved); ready for Phase 3 (Coordinator & First Sensor)
+last_updated: "2026-05-06T14:30:00.000Z"
+last_activity: 2026-05-06 -- Phase 02 verified + approved; PROJECT.md updated; 2 human UAT items deferred
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 02 — api-diff-layer-ha-free (4/4 complete, verifying)
+**Current focus:** Phase 03 — Coordinator & First Sensor (not started)
 
 ## Current Position
 
-Phase: 02 — All 4 plans complete; running phase verification
-Status: 186 tests pass + 7 S-04 expected skips; 100% diff coverage; all 4 ROADMAP success criteria CI-locked
-Last activity: 2026-05-06 -- 02-04 TZ matrix + coverage gates merged
+Phase: 02 — COMPLETE (approved 2026-05-06); ready to start Phase 03
+Status: All 4 ROADMAP Phase 2 success criteria CI-locked; 2 human UAT items deferred (CI green-on-push, .env.example UX)
+Last activity: 2026-05-06 -- Phase 02 verified + approved + PROJECT.md updated
 
-Progress: [██████████] 100%
+Progress: [██████████] 100% of Phase 2
 
 ## Performance Metrics
 

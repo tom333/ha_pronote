@@ -19,6 +19,13 @@ L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours es
 - [x] CI GitHub Actions (lint, tests, validation HACS) — *Partially validated in Phase 1: 01-04 ships lint/validate/test/release workflows SHA-pinned; branch protection on `main` deferred to first push (HUMAN-UAT #4)*
 - [x] Test harness foundation (unit + integration via PHACC) — *Validated in Phase 1: 01-03 ships pytest + PHACC fixture wiring + manifest contract regression test; production tests grow per-feature in subsequent phases*
 
+**From Phase 2 — API & Diff Layer (HA-free) (2026-05-06)**
+- [x] Pure-Python `api/` subpackage (auth, fetch, snapshot, error mapping) — *Validated in Phase 2: 02-01 ships `build_client` + `fetch_all` sync facade with full pronotepy error mapping; 100% covered; zero `homeassistant.*` imports (D-19 AST guard)*
+- [x] Pronote integration end-to-end proven via `scripts/snapshot.py` against the author's real instance — *Validated in Phase 2: 02-02 spike captured 6 anonymized fixture pairs; surfaced and fixed three pronotepy 2.14.6 production bugs (S-01 grades KeyError, S-02 URL `?login=true`, S-03 `information_and_surveys` is a method) before any HA wiring*
+- [x] Diff layer detecting cancellation / room change / teacher swap from snapshot pairs — *Validated in Phase 2: 02-03 ships `diff/lessons.py` with the identity-vs-content key contract from SPIKE-FINDINGS-bain3-311.md; 100% line coverage; 11 synthetic fixtures cover all algorithm branches*
+- [x] CI gates locking the HA-free contract: zero-HA-imports AST guard, fixture round-trip schema gate, TZ matrix (Europe/Paris × Pacific/Noumea), `--cov-fail-under=90` — *Validated in Phase 2: 02-04 wires all four gates into `.github/workflows/test.yml`; 186 tests pass + 7 expected S-04 skips in 0.74s*
+- **Acknowledged carry-over (S-04):** No empirical T0/T1 lessons-diff was captured (no teacher-side access to trigger schedule changes between captures); diff layer cancel/room/teacher classification is built against pronotepy's documented `Lesson` model + synthetic fixtures. Phase 4's first user-observed real schedule change is the empirical re-validation gate.
+
 ### Active
 
 <!-- Current scope. Building toward these. -->
@@ -118,4 +125,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-03 after Phase 1 (Foundations & Skeleton) completion — code-side PASSED, 5 operator-action items tracked in `01-HUMAN-UAT.md`*
+*Last updated: 2026-05-06 after Phase 2 (API & Diff Layer, HA-free) completion — code-side PASSED (186 tests + 100% diff coverage), 2 operator-action items tracked in `02-HUMAN-UAT.md`, S-04 carry-over to Phase 4*

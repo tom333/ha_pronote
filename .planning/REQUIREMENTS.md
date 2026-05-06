@@ -166,7 +166,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TIME-01 | Phase 3 | Pending |
 | TIME-02 | Phase 4 | Pending |
 | TIME-03 | Phase 4 | Pending |
-| TIME-04 | Phase 2 | Pending |
+| TIME-04 | Phase 2 | Implemented |
 | GRADE-01 | Phase 4 | Pending |
 | GRADE-02 | Phase 4 | Pending |
 | GRADE-03 | Phase 4 | Pending |
@@ -178,7 +178,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EVENT-02 | Phase 4 | Pending |
 | EVENT-03 | Phase 4 | Pending |
 | EVENT-04 | Phase 4 | Pending |
-| EVENT-05 | Phase 2 | Pending |
+| EVENT-05 | Phase 2 | Partial (diff layer shipped + 6 anon real fixtures; empirical T0/T1 lessons-diff deferred to Phase 4 per S-04) |
 | ENT-01 | Phase 4 | Pending |
 | ENT-02 | Phase 3 | Pending |
 | ENT-03 | Phase 3 | Pending |
@@ -196,7 +196,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DIST-02 | Phase 1 | Implemented |
 | DIST-03 | Phase 1 | Partial (CI shipped; branch protection deferred until push) |
 | DIST-04 | Phase 7 | Pending |
-| DIST-05 | Phase 2 | Pending |
+| DIST-05 | Phase 2 | Implemented |
 | DIST-06 | Phase 5 | Pending |
 | DIST-07 | Phase 7 | Pending |
 | DIST-08 | Phase 1 | Implemented |
