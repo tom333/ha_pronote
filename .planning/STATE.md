@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 complete (approved); ready for Phase 3 (Coordinator & First Sensor)
-last_updated: "2026-05-06T14:30:00.000Z"
-last_activity: 2026-05-06 -- Phase 02 verified + approved; PROJECT.md updated; 2 human UAT items deferred
+stopped_at: Phase 3 context gathered; ready for `/gsd-plan-phase 3`
+last_updated: "2026-05-06T15:30:00.000Z"
+last_activity: 2026-05-06 -- Phase 03 context gathered (4 areas discussed: Config Flow, token persistence, child_identifier freeze, sensor design)
 progress:
   total_phases: 7
   completed_phases: 2
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 03 — Coordinator & First Sensor (not started)
+**Current focus:** Phase 03 — Coordinator & First Sensor (context gathered; planning next)
 
 ## Current Position
 
-Phase: 02 — COMPLETE (approved 2026-05-06); ready to start Phase 03
-Status: All 4 ROADMAP Phase 2 success criteria CI-locked; 2 human UAT items deferred (CI green-on-push, .env.example UX)
-Last activity: 2026-05-06 -- Phase 02 verified + approved + PROJECT.md updated
+Phase: 03 — context gathered; ready for `/gsd-plan-phase 3`
+Status: 4 implementation areas discussed and locked in 03-CONTEXT.md (D-01..D-26 + C-01..C-06). Downstream agents (researcher, planner) have a complete decision base.
+Last activity: 2026-05-06 -- Phase 03 context gathered (Config Flow shape, token persistence trigger, child_identifier ENT-02 freeze, sensor design)
 
-Progress: [██████████] 100% of Phase 2
+Progress: [          ] 0% of Phase 3
 
 ## Performance Metrics
 
@@ -90,6 +90,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-03
-Stopped at: Phase 2 context gathered; ready for `/gsd-plan-phase 2`
-Resume file: .planning/phases/02-api-diff-layer-ha-free/02-CONTEXT.md
+Last session: 2026-05-06
+Stopped at: Phase 3 context gathered; ready for `/gsd-plan-phase 3`
+Resume file: .planning/phases/03-coordinator-first-sensor/03-CONTEXT.md
