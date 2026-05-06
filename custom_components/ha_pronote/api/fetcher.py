@@ -58,7 +58,16 @@ def fetch_all(
 
     try:
         raw_lessons = list(client.lessons(date_from=start, date_to=end))
-        raw_grades = list(client.current_period.grades) if client.current_period else []
+        try:
+            raw_grades = list(client.current_period.grades) if client.current_period else []
+        except (KeyError, AttributeError):
+            # Pronote may not expose grades on this account/period (parent
+            # accounts before grades publication, schema gaps in pronotepy
+            # 2.14.6 — observed during 02-02 spike: KeyError 'listeDevoirs'
+            # when current_period is truthy but its `.grades` accessor hits a
+            # missing key). Lessons + information are the Core Value path —
+            # do not fail the snapshot when only grades are unavailable.
+            raw_grades = []
         raw_info = list(client.information_and_surveys)
     except pronotepy.PronoteAPIError as err:
         raise CommunicationError(

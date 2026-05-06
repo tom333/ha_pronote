@@ -272,3 +272,66 @@ def test_fetch_all_skips_set_child_for_parent_client_when_identifier_none():
         child_index_or_identifier=None,
     )
     assert mock.set_child.call_count == 0
+
+
+# --- 02-02 spike findings: defensive fallback when Pronote omits grades ---
+
+class _GradesKeyErrorPeriod:
+    """current_period exists but `.grades` raises KeyError.
+
+    Reproduces the pronotepy 2.14.6 path observed during the 02-02 spike on a
+    parent account: ``response["dataSec"]["data"]["listeDevoirs"]["V"]`` fires
+    ``KeyError('listeDevoirs')`` when Pronote did not include the listing.
+    """
+
+    @property
+    def grades(self) -> list:
+        raise KeyError("listeDevoirs")
+
+
+class _GradesAttributeErrorPeriod:
+    """Defensive: pronotepy could also surface AttributeError mid-traversal."""
+
+    @property
+    def grades(self) -> list:
+        raise AttributeError("grades")
+
+
+def test_keyerror_on_current_period_grades_returns_empty_grades(
+):
+    """02-02 spike finding: pronotepy raises KeyError('listeDevoirs') when the
+    Pronote response omits the grades section. fetch_all must downgrade to
+    grades=[] rather than fail the whole snapshot — lessons + information are
+    the Core Value path."""
+    naive_start = datetime(2026, 5, 4, 8, 0)
+    naive_end = datetime(2026, 5, 4, 9, 0)
+
+    class _Client:
+        information_and_surveys: ClassVar[list] = []
+
+        def __init__(self) -> None:
+            self.current_period = _GradesKeyErrorPeriod()
+
+        def lessons(self, date_from: date, date_to: date) -> list:
+            return [_FakeLesson(naive_start, naive_end)]
+
+    snap = fetch_all(_Client(), today=date(2026, 5, 4), school_tz=NOUMEA)
+    assert snap.grades == []
+    assert len(snap.lessons) == 1
+
+
+def test_attributeerror_on_current_period_grades_returns_empty_grades():
+    """Defensive twin of the KeyError test — pronotepy may raise AttributeError
+    on a similar schema gap. Same downgrade applies."""
+
+    class _Client:
+        information_and_surveys: ClassVar[list] = []
+
+        def __init__(self) -> None:
+            self.current_period = _GradesAttributeErrorPeriod()
+
+        def lessons(self, date_from: date, date_to: date) -> list:
+            return []
+
+    snap = fetch_all(_Client(), today=date(2026, 5, 4), school_tz=NOUMEA)
+    assert snap.grades == []
