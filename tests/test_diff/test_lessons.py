@@ -14,8 +14,8 @@ change is captured (Phase 4 verification gate per the SPIKE-FINDINGS doc).
 
 from __future__ import annotations
 
-import json
 from datetime import date
+import json
 
 import pytest
 
@@ -112,9 +112,7 @@ class TestMultiChangeSynthetic:
 class TestRealCancellation:
     """ROADMAP success criterion #3: real fixture from the spike (D-05)."""
 
-    def test_real_cancellation_emits_at_least_one_canceled_event(
-        self, load_fixture, load_raw_fixture
-    ):
+    def test_real_cancellation_emits_at_least_one_canceled_event(self, load_fixture, load_raw_fixture):
         if not _real_pair_has_lesson_change(load_raw_fixture, "cancellation"):
             pytest.skip(
                 "real/cancellation_T0/T1 lessons are byte-identical "
@@ -149,24 +147,17 @@ class TestRealRoomChange:
             "Expected at least one room event from the live spike capture."
         )
 
-    def test_real_room_change_does_not_emit_phantom_canceled(
-        self, load_fixture, load_raw_fixture
-    ):
+    def test_real_room_change_does_not_emit_phantom_canceled(self, load_fixture, load_raw_fixture):
         """bain3#311: the room-changed lesson must NOT appear as canceled."""
         if not _real_pair_has_lesson_change(load_raw_fixture, "room_change"):
-            pytest.skip(
-                "real/room_change_T0/T1 lessons are byte-identical "
-                "(Plan 02-02 S-04 acknowledged gap)"
-            )
+            pytest.skip("real/room_change_T0/T1 lessons are byte-identical (Plan 02-02 S-04 acknowledged gap)")
         t0 = load_fixture("real/room_change_T0.json")
         t1 = load_fixture("real/room_change_T1.json")
         events = diff_lessons(t0, t1, "today")
         canceled = [(e.lesson_date, e.subject) for e in events if e.change_type == "canceled"]
         room = [(e.lesson_date, e.subject) for e in events if e.change_type == "room"]
         overlap = set(canceled) & set(room)
-        assert not overlap, (
-            f"bain3#311 anti-pattern: same lesson reported as both canceled AND room: {overlap}"
-        )
+        assert not overlap, f"bain3#311 anti-pattern: same lesson reported as both canceled AND room: {overlap}"
 
 
 class TestRealTeacherSwap:
@@ -193,9 +184,7 @@ class TestRealFixturesRoundTripThroughSnapshot:
     path on full-size, real-shaped Pronote responses.
     """
 
-    @pytest.mark.parametrize(
-        "scenario", ["cancellation", "room_change", "teacher_swap"]
-    )
+    @pytest.mark.parametrize("scenario", ["cancellation", "room_change", "teacher_swap"])
     @pytest.mark.parametrize("phase", ["T0", "T1"])
     def test_real_fixture_round_trips(self, load_fixture, scenario: str, phase: str):
         """Loading via load_fixture must succeed (Snapshot.from_dict happy path)."""

@@ -63,9 +63,7 @@ def test_lesson_uncanceled_emits_modified_change(load_fixture):
     # SVT (teacher).
     canceled_events = [e for e in events if e.change_type == "canceled"]
     assert canceled_events == [], "True->False on canceled MUST NOT emit canceled"
-    modified_events = [
-        e for e in events if e.change_type == "modified" and e.subject == "Mathematiques"
-    ]
+    modified_events = [e for e in events if e.change_type == "modified" and e.subject == "Mathematiques"]
     assert len(modified_events) == 1
 
 
