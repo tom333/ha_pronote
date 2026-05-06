@@ -18,6 +18,7 @@ htmlcov/
 node_modules/
 *.zip
 
-# Phase 2: real-Pronote spike output (raw + .env)
+# Phase 2: real-Pronote spike output (raw + .env + replacements map)
 .env
+.replacements.json
 tests/fixtures/real/_raw_*.json

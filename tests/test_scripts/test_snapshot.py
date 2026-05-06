@@ -20,7 +20,14 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.snapshot import _build_replacements, _read_env, anonymize, no_pii, walk_and_replace  # noqa: E402
+from scripts.snapshot import (  # noqa: E402
+    _build_replacements,
+    _load_replacements_file,
+    _read_env,
+    anonymize,
+    no_pii,
+    walk_and_replace,
+)
 
 
 def test_walk_and_replace_replaces_in_string():
@@ -102,6 +109,56 @@ def test_build_replacements_includes_username_and_host():
     repls = _build_replacements(env)
     assert repls["demonstration"] == "Eleve Test"
     assert repls["demo.example.com"] == "pronote.example.fr"
+
+
+def test_build_replacements_merges_extra_replacements():
+    """Extra replacements (from the gitignored .replacements.json) override
+    nothing built-in but extend the map for teacher/classroom anonymization."""
+    env = {"PRONOTE_USERNAME": "demonstration"}
+    extra = {"REAL TEACHER": "prof 1", "Salle Z9": "Salle Test"}
+    repls = _build_replacements(env, extra=extra)
+    assert repls["demonstration"] == "Eleve Test"
+    assert repls["REAL TEACHER"] == "prof 1"
+    assert repls["Salle Z9"] == "Salle Test"
+
+
+def test_load_replacements_returns_empty_when_file_missing(tmp_path: Path):
+    """SECURITY: missing .replacements.json is the normal case for fresh
+    checkouts and CI — must degrade gracefully (no PII assumed)."""
+    assert _load_replacements_file(tmp_path / "absent.json") == {}
+
+
+def test_load_replacements_parses_flat_string_dict(tmp_path: Path):
+    p = tmp_path / ".replacements.json"
+    p.write_text('{"REAL NAME": "stand-in", "Salle B204": "Salle Test"}', encoding="utf-8")
+    out = _load_replacements_file(p)
+    assert out == {"REAL NAME": "stand-in", "Salle B204": "Salle Test"}
+
+
+def test_load_replacements_rejects_non_dict_payload(tmp_path: Path):
+    p = tmp_path / ".replacements.json"
+    p.write_text('["not", "a", "dict"]', encoding="utf-8")
+    assert _load_replacements_file(p) == {}
+
+
+def test_load_replacements_rejects_non_string_values(tmp_path: Path):
+    p = tmp_path / ".replacements.json"
+    p.write_text('{"key": 42}', encoding="utf-8")
+    assert _load_replacements_file(p) == {}
+
+
+def test_load_replacements_handles_invalid_json(tmp_path: Path):
+    p = tmp_path / ".replacements.json"
+    p.write_text("{ not valid json", encoding="utf-8")
+    assert _load_replacements_file(p) == {}
+
+
+def test_replacements_json_is_gitignored():
+    """SECURITY (T-02-02-02): .replacements.json must be gitignored — same
+    threat class as .env. The file holds real teacher/classroom names that
+    must never enter the committed source tree."""
+    gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert ".replacements.json" in gitignore
 
 
 @pytest.mark.timeout(5)

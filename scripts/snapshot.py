@@ -73,13 +73,40 @@ def no_pii(obj: Any, pii_blocklist: list[str]) -> bool:
     return not any(needle in serialized for needle in pii_blocklist if needle)
 
 
-def _build_replacements(env: dict[str, str]) -> dict[str, str]:
+def _load_replacements_file(path: Path) -> dict[str, str]:
+    """Load extra PII replacements from a gitignored JSON file.
+
+    The file is a flat ``{<real PII string>: <stand-in>}`` JSON dict.
+    Lives at repo root (``.replacements.json``) and MUST be gitignored
+    (security threat T-02-02-02 — zero PII strings in committed source).
+
+    Returns an empty dict if the file does not exist (graceful no-op for
+    ``.env.example``-only / demo-instance use).
+    """
+    if not path.is_file():
+        return {}
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        print(f"warning: could not parse {path}: {err}", file=sys.stderr)
+        return {}
+    if not isinstance(loaded, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in loaded.items()
+    ):
+        print(
+            f"warning: {path} must be a flat string-to-string JSON object — ignored",
+            file=sys.stderr,
+        )
+        return {}
+    return loaded
+
+
+def _build_replacements(env: dict[str, str], extra: dict[str, str] | None = None) -> dict[str, str]:
     """D-12: child names, school URL, establishment, teacher names.
 
-    EXTEND this dict with real teacher names and classroom IDs as the spike
-    captures them. The `replacements` dict is the source of truth — every
-    PII token discovered during the spike MUST be added here BEFORE
-    committing the anonymized fixture.
+    Real teacher names and classroom IDs MUST live in the gitignored
+    ``.replacements.json`` (passed in via ``extra``), NEVER in this file —
+    this script is committed; ``.replacements.json`` is not.
     """
     repls: dict[str, str] = {}
     if env.get("PRONOTE_USERNAME"):
@@ -88,7 +115,8 @@ def _build_replacements(env: dict[str, str]) -> dict[str, str]:
         host = urlparse(env["PRONOTE_URL"]).netloc
         if host:
             repls[host] = "pronote.example.fr"
-    # Plan 02-02's spike executor adds firstname/lastname/teacher names/classroom IDs here.
+    if extra:
+        repls.update(extra)
     return repls
 
 
@@ -114,45 +142,64 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("tests/fixtures/real"),
         help="Output directory (default: tests/fixtures/real/).",
     )
+    parser.add_argument(
+        "--anonymize-only",
+        action="store_true",
+        help=(
+            "Skip the Pronote fetch — re-anonymize an existing _raw_*.json. "
+            "Used after extending .replacements.json without re-triggering "
+            "Pronote teacher-side changes."
+        ),
+    )
     args = parser.parse_args(argv)
 
     env = _read_env(REPO_ROOT / ".env")
-    for required in (
-        "PRONOTE_URL",
-        "PRONOTE_USERNAME",
-        "PRONOTE_PASSWORD",
-        "PRONOTE_ACCOUNT_TYPE",
-    ):
-        if not env.get(required):
-            print(
-                f"error: {required} not set in .env (see .env.example)",
-                file=sys.stderr,
-            )
-            return 2
-
-    client = build_client(
-        url=env["PRONOTE_URL"],
-        account_type=env["PRONOTE_ACCOUNT_TYPE"],  # type: ignore[arg-type]
-        username=env["PRONOTE_USERNAME"],
-        password=env["PRONOTE_PASSWORD"],
-    )
-    snap = fetch_all(
-        client,
-        today=date.today(),
-        school_tz=ZoneInfo("Pacific/Noumea"),
-    )
+    extra = _load_replacements_file(REPO_ROOT / ".replacements.json")
 
     args.out.mkdir(parents=True, exist_ok=True)
     raw_path = args.out / f"_raw_{args.scenario}_{args.phase}.json"
     anon_path = args.out / f"{args.scenario}_{args.phase}.json"
 
-    snap_dict = snap.to_dict()
-    raw_path.write_text(
-        json.dumps(snap_dict, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    if args.anonymize_only:
+        if not raw_path.is_file():
+            print(
+                f"error: --anonymize-only needs {raw_path} to exist; run without the flag first.",
+                file=sys.stderr,
+            )
+            return 4
+        snap_dict = json.loads(raw_path.read_text(encoding="utf-8"))
+    else:
+        for required in (
+            "PRONOTE_URL",
+            "PRONOTE_USERNAME",
+            "PRONOTE_PASSWORD",
+            "PRONOTE_ACCOUNT_TYPE",
+        ):
+            if not env.get(required):
+                print(
+                    f"error: {required} not set in .env (see .env.example)",
+                    file=sys.stderr,
+                )
+                return 2
 
-    replacements = _build_replacements(env)
+        client = build_client(
+            url=env["PRONOTE_URL"],
+            account_type=env["PRONOTE_ACCOUNT_TYPE"],  # type: ignore[arg-type]
+            username=env["PRONOTE_USERNAME"],
+            password=env["PRONOTE_PASSWORD"],
+        )
+        snap = fetch_all(
+            client,
+            today=date.today(),
+            school_tz=ZoneInfo("Pacific/Noumea"),
+        )
+        snap_dict = snap.to_dict()
+        raw_path.write_text(
+            json.dumps(snap_dict, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    replacements = _build_replacements(env, extra=extra)
     anon = anonymize(snap_dict, replacements)
     anon_path.write_text(
         json.dumps(anon, indent=2, ensure_ascii=False),
@@ -164,12 +211,15 @@ def main(argv: list[str] | None = None) -> int:
         list(replacements.keys()),
     ):
         print(
-            "error: anonymized output still contains PII tokens — extend _build_replacements before committing.",
+            "error: anonymized output still contains PII tokens — extend .replacements.json before committing.",
             file=sys.stderr,
         )
         return 3
 
-    print(f"wrote {raw_path} (gitignored) and {anon_path} (committable)")
+    if args.anonymize_only:
+        print(f"re-anonymized {anon_path} from {raw_path}")
+    else:
+        print(f"wrote {raw_path} (gitignored) and {anon_path} (committable)")
     return 0
 
 
