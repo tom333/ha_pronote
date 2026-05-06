@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1.0
 milestone_name: milestone
 status: executing
-stopped_at: Wave 1 of Phase 2 complete (02-01); Wave 2 (02-02) is autonomous=false — needs user setup
-last_updated: "2026-05-05T11:00:00.000Z"
-last_activity: 2026-05-05 -- Phase 02 wave 1 complete (02-01 api skeleton)
+stopped_at: Waves 1+2 of Phase 2 complete (02-01 + 02-02 spike); ready for Wave 3 (02-03 diff layer)
+last_updated: "2026-05-06T12:00:00.000Z"
+last_activity: 2026-05-06 -- Phase 02 wave 2 complete (real-Pronote spike + 3 source fixes)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
-  percent: 67
+  completed_plans: 7
+  percent: 78
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 02 — api-diff-layer-ha-free (Wave 1/4 complete)
+**Current focus:** Phase 02 — api-diff-layer-ha-free (Wave 2/4 complete)
 
 ## Current Position
 
-Phase: 02 — Wave 1 complete (1/4 plans)
-Status: Awaiting user setup for Wave 2 (02-02 real-Pronote spike, autonomous=false)
-Last activity: 2026-05-05 -- 02-01 api skeleton merged + 64 tests pass
+Phase: 02 — Waves 1+2 complete (2/4 plans)
+Status: Ready to execute Wave 3 (02-03 diff layer) — autonomous, no user setup needed
+Last activity: 2026-05-06 -- 02-02 real-Pronote spike + 3 source fixes (S-01, S-02, S-03) committed; 74 tests pass
 
-Progress: [██░░░░░░░░] 25%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
