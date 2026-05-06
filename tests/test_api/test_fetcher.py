@@ -94,12 +94,17 @@ class _FakeClient:
     ) -> None:
         self._lessons = lessons or []
         self.current_period = _FakePeriod(grades) if grades is not None else None
-        self.information_and_surveys = info or []
+        self._info = info or []
         self.last_call: tuple | None = None
 
     def lessons(self, date_from: date, date_to: date) -> list:
         self.last_call = (date_from, date_to)
         return self._lessons
+
+    def information_and_surveys(self) -> list:
+        # pronotepy 2.14.6 exposes this as a method (not a property) — 02-02
+        # spike finding. The fake mirrors that contract.
+        return self._info
 
 
 def test_fetch_all_window_is_today_minus_7_to_today_plus_14():
@@ -167,7 +172,9 @@ def test_school_tz_is_stored_as_string():
 def test_pronote_api_error_during_lessons_raises_communication_error():
     class _ErrClient:
         current_period: ClassVar = _FakePeriod([])
-        information_and_surveys: ClassVar[list] = []
+
+        def information_and_surveys(self) -> list:
+            return []
 
         def lessons(self, date_from: date, date_to: date) -> list:
             raise pronotepy.PronoteAPIError("Some failure")
@@ -180,7 +187,9 @@ def test_pronote_api_error_during_lessons_raises_communication_error():
 def test_os_error_during_lessons_raises_communication_error_server_down():
     class _ErrClient:
         current_period: ClassVar = _FakePeriod([])
-        information_and_surveys: ClassVar[list] = []
+
+        def information_and_surveys(self) -> list:
+            return []
 
         def lessons(self, date_from: date, date_to: date) -> list:
             raise OSError("net down")
@@ -218,7 +227,7 @@ def test_fetch_all_calls_set_child_for_parent_client_with_index():
     mock = MagicMock(spec=pronotepy.ParentClient)
     mock.lessons.return_value = []
     mock.current_period = _FakePeriod([])
-    mock.information_and_surveys = []
+    mock.information_and_surveys.return_value = []
     fetch_all(
         mock,
         today=date(2026, 5, 4),
@@ -232,7 +241,7 @@ def test_fetch_all_calls_set_child_for_parent_client_with_string_identifier():
     mock = MagicMock(spec=pronotepy.ParentClient)
     mock.lessons.return_value = []
     mock.current_period = _FakePeriod([])
-    mock.information_and_surveys = []
+    mock.information_and_surveys.return_value = []
     fetch_all(
         mock,
         today=date(2026, 5, 4),
@@ -246,7 +255,7 @@ def test_fetch_all_skips_set_child_for_eleve_client():
     mock = MagicMock(spec=pronotepy.Client)
     mock.lessons.return_value = []
     mock.current_period = _FakePeriod([])
-    mock.information_and_surveys = []
+    mock.information_and_surveys.return_value = []
     fetch_all(
         mock,
         today=date(2026, 5, 4),
@@ -264,7 +273,7 @@ def test_fetch_all_skips_set_child_for_parent_client_when_identifier_none():
     mock = MagicMock(spec=pronotepy.ParentClient)
     mock.lessons.return_value = []
     mock.current_period = _FakePeriod([])
-    mock.information_and_surveys = []
+    mock.information_and_surveys.return_value = []
     fetch_all(
         mock,
         today=date(2026, 5, 4),
@@ -307,13 +316,14 @@ def test_keyerror_on_current_period_grades_returns_empty_grades(
     naive_end = datetime(2026, 5, 4, 9, 0)
 
     class _Client:
-        information_and_surveys: ClassVar[list] = []
-
         def __init__(self) -> None:
             self.current_period = _GradesKeyErrorPeriod()
 
         def lessons(self, date_from: date, date_to: date) -> list:
             return [_FakeLesson(naive_start, naive_end)]
+
+        def information_and_surveys(self) -> list:
+            return []
 
     snap = fetch_all(_Client(), today=date(2026, 5, 4), school_tz=NOUMEA)
     assert snap.grades == []
@@ -325,13 +335,38 @@ def test_attributeerror_on_current_period_grades_returns_empty_grades():
     on a similar schema gap. Same downgrade applies."""
 
     class _Client:
-        information_and_surveys: ClassVar[list] = []
-
         def __init__(self) -> None:
             self.current_period = _GradesAttributeErrorPeriod()
 
         def lessons(self, date_from: date, date_to: date) -> list:
             return []
 
+        def information_and_surveys(self) -> list:
+            return []
+
     snap = fetch_all(_Client(), today=date(2026, 5, 4), school_tz=NOUMEA)
     assert snap.grades == []
+
+
+def test_information_and_surveys_is_called_as_method_not_iterated_as_attribute():
+    """02-02 spike finding: pronotepy 2.14.6 declares ``information_and_surveys``
+    as a method, not a property. Treating it as an attribute (``list(client.x)``
+    instead of ``list(client.x())``) raises ``TypeError: 'method' object is not
+    iterable``. This test locks the call site so a regression would fail loudly.
+    """
+
+    calls: list[bool] = []
+
+    class _Client:
+        current_period: ClassVar = _FakePeriod([])
+
+        def lessons(self, date_from: date, date_to: date) -> list:
+            return []
+
+        def information_and_surveys(self) -> list:
+            calls.append(True)
+            return []
+
+    snap = fetch_all(_Client(), today=date(2026, 5, 4), school_tz=NOUMEA)
+    assert calls == [True], "information_and_surveys() must be called, not accessed"
+    assert snap.information == []

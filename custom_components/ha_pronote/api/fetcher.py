@@ -68,7 +68,7 @@ def fetch_all(
             # missing key). Lessons + information are the Core Value path —
             # do not fail the snapshot when only grades are unavailable.
             raw_grades = []
-        raw_info = list(client.information_and_surveys)
+        raw_info = list(client.information_and_surveys())
     except pronotepy.PronoteAPIError as err:
         raise CommunicationError(
             str(err),
