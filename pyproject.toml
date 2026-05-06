@@ -39,6 +39,7 @@ log_date_format = "%Y-%m-%d %H:%M:%S"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra -q --strict-markers"
+timeout = 1   # D-28: per-test 1s timeout (sub-2s gate via pytest-timeout 2.4.0 transitive via PHACC)
 markers = [
     "unit: Unit tests (fast, no external dependencies)",
     "integration: Integration tests (use hass fixture)",
@@ -51,7 +52,11 @@ filterwarnings = [
 
 [tool.coverage.run]
 source = ["custom_components/ha_pronote"]
-omit = ["tests/*"]
+omit = [
+    "tests/*",
+    "*/diff/grades.py",         # D-04 / C-02 — Phase 4 fills the body, excluded until then.
+    "*/diff/notifications.py",  # D-04 / C-02 — Phase 4 fills the body, excluded until then.
+]
 
 [tool.coverage.report]
 exclude_lines = [
