@@ -3,19 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 from datetime import date
+import json
 from typing import get_args
 
 import pytest
 
-from custom_components.ha_pronote.diff import (
-    ChangeType,
-    DayLabel,
-    LessonChange,
-    NewGrade,
-    NewInformation,
-)
+from custom_components.ha_pronote.diff import ChangeType, DayLabel, LessonChange, NewGrade, NewInformation
 
 
 def test_change_type_taxonomy_is_exactly_four_values():
