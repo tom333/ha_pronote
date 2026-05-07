@@ -38,8 +38,27 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = ["DOMAIN", "PronoteConfigEntry"]
 
 
+_REQUIRED_ENTRY_DATA_KEYS = (
+    "url",
+    "account_type",
+    "username",
+    "password",
+    "child_identifier",
+    "child_name",
+)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> bool:
     """Set up HA-Pronote from a ConfigEntry (D-07, D-21, D-25)."""
+    # WR-02: validate required entry.data keys upfront and fail with a clean
+    # ConfigEntryNotReady. Without this guard, a corrupted entry (manual JSON
+    # edit, stale Phase 1 placeholder, future-migration regression) would
+    # surface as a raw KeyError traceback in HA logs. async_migrate_entry is
+    # a no-op in v1 (D-26), so this is the only line of defence at setup time.
+    missing = [k for k in _REQUIRED_ENTRY_DATA_KEYS if k not in entry.data]
+    if missing:
+        raise ConfigEntryNotReady(f"entry.data missing required keys: {missing}")
+
     school_tz = ZoneInfo(DEFAULT_SCHOOL_TZ)  # Phase 6 OPT-04 reads entry.options.
     device_name = f"home-assistant-{entry.entry_id[:8]}"  # AUTH-07 / D-18 / C-04.
 
