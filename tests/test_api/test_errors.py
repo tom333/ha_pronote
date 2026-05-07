@@ -14,6 +14,7 @@ from custom_components.ha_pronote.api import (
     ParseError,
     PronoteIntegrationError,
     RateLimitedError,
+    redact,
 )
 
 
@@ -89,3 +90,39 @@ def test_pronote_integration_error_stores_reason_and_message():
     err = PronoteIntegrationError(ErrorReason.SESSION_EXPIRED, "token expired")
     assert err.reason == ErrorReason.SESSION_EXPIRED
     assert err.message == "token expired"
+
+
+# ---------------------------------------------------------------------------
+# WR-05: redact() — pronotepy can echo URL/credentials in str(err); these
+# unit tests lock the redaction surface so a future leak (e.g. a 500 with
+# request body echoed back) is scrubbed before reaching HA logs.
+# ---------------------------------------------------------------------------
+
+
+def test_redact_strips_password_kv():
+    assert "secret" not in redact("login failed: password=secret")
+    assert "<redacted>" in redact("login failed: password=secret")
+
+
+def test_redact_strips_token_kv():
+    out = redact("auth fail token=abc123XYZ.-_=+/ for user")
+    assert "abc123XYZ" not in out
+    assert "<redacted>" in out
+
+
+def test_redact_strips_authorization_header_echo():
+    out = redact("Server replied: Authorization: Bearer eyJhbGciOi.qq")
+    assert "eyJ" not in out
+    assert "<redacted>" in out
+
+
+def test_redact_is_idempotent_on_clean_messages():
+    msg = "Your IP address is suspended for 24h"
+    assert redact(msg) == msg
+
+
+def test_typed_exceptions_can_be_built_from_redacted_message():
+    raw = "login failed: password=hunter2"
+    err = AuthError(redact(raw))
+    assert "hunter2" not in err.message
+    assert "hunter2" not in str(err)

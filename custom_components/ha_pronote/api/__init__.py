@@ -19,7 +19,15 @@ layer to HA's storage concerns; resist the temptation.
 """
 
 from .client import build_client, build_or_resume_client
-from .errors import AuthError, CommunicationError, ErrorReason, ParseError, PronoteIntegrationError, RateLimitedError
+from .errors import (
+    AuthError,
+    CommunicationError,
+    ErrorReason,
+    ParseError,
+    PronoteIntegrationError,
+    RateLimitedError,
+    redact,
+)
 from .fetcher import fetch_all
 from .models import Grade, Information, Lesson, Snapshot
 
@@ -37,4 +45,5 @@ __all__ = [
     "build_client",
     "build_or_resume_client",
     "fetch_all",
+    "redact",
 ]

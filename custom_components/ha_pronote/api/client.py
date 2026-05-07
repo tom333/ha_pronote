@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 import pronotepy
 
-from .errors import AuthError, CommunicationError, ErrorReason, RateLimitedError
+from .errors import AuthError, CommunicationError, ErrorReason, RateLimitedError, redact
 
 AccountType = Literal["eleve", "parent"]
 
@@ -45,16 +45,17 @@ def build_client(
     try:
         return cls(url, username=username, password=password)
     except pronotepy.exceptions.CryptoError as err:
-        raise AuthError(str(err)) from err
+        raise AuthError(redact(str(err))) from err  # WR-05
     except pronotepy.PronoteAPIError as err:
+        msg = redact(str(err))  # WR-05
         if _IP_SUSPENDED_LITERAL in str(err):
-            raise RateLimitedError(str(err)) from err
+            raise RateLimitedError(msg) from err
         raise CommunicationError(
-            str(err),
+            msg,
             reason=ErrorReason.PROTOCOL_BROKEN,
         ) from err
     except OSError as err:
-        raise CommunicationError(str(err)) from err
+        raise CommunicationError(redact(str(err))) from err  # WR-05
 
 
 def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 (url + auth quad + session + device_name)
@@ -118,13 +119,14 @@ def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 
             device_name=device_name,
         )
     except pronotepy.exceptions.CryptoError as err:
-        raise AuthError(str(err)) from err
+        raise AuthError(redact(str(err))) from err  # WR-05
     except pronotepy.PronoteAPIError as err:
+        msg = redact(str(err))  # WR-05
         if _IP_SUSPENDED_LITERAL in str(err):
-            raise RateLimitedError(str(err)) from err
+            raise RateLimitedError(msg) from err
         raise CommunicationError(
-            str(err),
+            msg,
             reason=ErrorReason.PROTOCOL_BROKEN,
         ) from err
     except OSError as err:
-        raise CommunicationError(str(err)) from err
+        raise CommunicationError(redact(str(err))) from err  # WR-05
