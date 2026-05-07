@@ -140,7 +140,7 @@ def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 
         raise CommunicationError(redact(str(err))) from err  # WR-05
 
 
-def set_active_child(client: pronotepy.ParentClient, child_index: int) -> None:
+def set_active_child(client: pronotepy.ParentClient, child_index: int | str) -> None:
     """Apply a parent's child selection with our typed-error mapping (CR-04).
 
     Wraps ``client.set_child(child_index)`` so callers don't have to know
@@ -161,7 +161,9 @@ def set_active_child(client: pronotepy.ParentClient, child_index: int) -> None:
     Args:
         client: Live ``pronotepy.ParentClient`` (the only client class with
             ``set_child``).
-        child_index: 0-based index into ``client.children``.
+        child_index: 0-based index into ``client.children`` OR a string
+            identifier accepted by pronotepy's ``set_child`` overload
+            (D-21 — fetcher.fetch_all may pass either form).
 
     Raises:
         AuthError: see above.

@@ -11,7 +11,14 @@ from zoneinfo import ZoneInfo
 import pronotepy
 import pytest
 
-from custom_components.ha_pronote.api import CommunicationError, ErrorReason, Snapshot, fetch_all
+from custom_components.ha_pronote.api import (
+    AuthError,
+    CommunicationError,
+    ErrorReason,
+    RateLimitedError,
+    Snapshot,
+    fetch_all,
+)
 
 NOUMEA = ZoneInfo("Pacific/Noumea")
 PARIS = ZoneInfo("Europe/Paris")
@@ -370,3 +377,63 @@ def test_information_and_surveys_is_called_as_method_not_iterated_as_attribute()
     snap = fetch_all(_Client(), today=date(2026, 5, 4), school_tz=NOUMEA)
     assert calls == [True], "information_and_surveys() must be called, not accessed"
     assert snap.information == []
+
+
+# ---------------------------------------------------------------------------
+# CR-06: the set_child call site inside fetch_all must route through
+# set_active_child so a CryptoError on a stale parent session surfaces as
+# AuthError (not raw pronotepy.PronoteAPIError) — defends the D-09 silent
+# recovery contract for parent accounts. Cycle-1 CR-04 missed this 4th call
+# site; cycle-2 CR-06 closes the gap.
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_all_set_child_crypto_error_surfaces_as_auth_error():
+    """CR-06: a stale parent session raising CryptoError on set_child must
+    surface as the typed AuthError, not the raw pronotepy exception.
+    Without the set_active_child wrapping, the coordinator's D-09 silent
+    recovery branch would never fire and the failure would leak to HA's
+    safety net as a generic UpdateFailed."""
+    mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.set_child.side_effect = pronotepy.exceptions.CryptoError("session expired")
+
+    with pytest.raises(AuthError) as excinfo:
+        fetch_all(mock, today=date(2026, 5, 4), school_tz=NOUMEA, child_index_or_identifier=0)
+    assert excinfo.value.reason == ErrorReason.AUTH_FAILED
+
+
+def test_fetch_all_set_child_ip_suspended_surfaces_as_rate_limited():
+    """CR-06: pronotepy returning the IP-suspended literal during set_child
+    must surface as RateLimitedError so Phase 5's circuit-breaker can read
+    .reason and back off — defends D-22 / Pitfall 1."""
+    mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.set_child.side_effect = pronotepy.PronoteAPIError("Your IP address is suspended for 24h")
+
+    with pytest.raises(RateLimitedError) as excinfo:
+        fetch_all(mock, today=date(2026, 5, 4), school_tz=NOUMEA, child_index_or_identifier=0)
+    assert excinfo.value.reason == ErrorReason.IP_SUSPENDED
+
+
+def test_fetch_all_set_child_other_api_error_surfaces_as_communication_error():
+    """CR-06: any other pronotepy.PronoteAPIError during set_child surfaces
+    as CommunicationError(PROTOCOL_BROKEN) — same mapping as build_client."""
+    mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.set_child.side_effect = pronotepy.PronoteAPIError("schema drift")
+
+    with pytest.raises(CommunicationError) as excinfo:
+        fetch_all(mock, today=date(2026, 5, 4), school_tz=NOUMEA, child_index_or_identifier=0)
+    assert excinfo.value.reason == ErrorReason.PROTOCOL_BROKEN
+
+
+def test_fetch_all_set_child_does_not_leak_raw_pronote_api_error():
+    """CR-06 negative: a raw pronotepy.PronoteAPIError must never escape
+    fetch_all when raised inside set_child — the typed wrapper mediates
+    every Pronote interaction (D-09 + WR-05 + Phase 5 backoff all depend on
+    this contract)."""
+    mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.set_child.side_effect = pronotepy.exceptions.CryptoError("session expired")
+
+    # The raw pronotepy.PronoteAPIError (parent of CryptoError) must NOT be
+    # what reaches the caller — set_active_child remaps it to AuthError.
+    with pytest.raises((AuthError, RateLimitedError, CommunicationError)):
+        fetch_all(mock, today=date(2026, 5, 4), school_tz=NOUMEA, child_index_or_identifier=0)

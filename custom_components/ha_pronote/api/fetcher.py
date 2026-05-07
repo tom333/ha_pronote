@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from zoneinfo import ZoneInfo
 
 from ._strip import strip_client_refs
+from .client import set_active_child
 from .errors import CommunicationError, ErrorReason
 from .models import Grade, Information, Lesson, Snapshot
 
@@ -45,13 +46,31 @@ def fetch_all(
         Plain-dataclass ``Snapshot``. NO pronotepy objects leak (D-24).
 
     Raises:
-        CommunicationError: any failure during pronotepy fetch.
+        AuthError: a stale parent session triggers ``CryptoError`` during
+            ``set_active_child`` (CR-06 — caller's D-09 silent recovery
+            handles this).
+        RateLimitedError: pronotepy returns the IP-suspended literal during
+            ``set_active_child`` (D-22 — Phase 5's circuit-breaker reads
+            ``.reason``).
+        CommunicationError: any other failure during pronotepy fetch (or
+            during ``set_active_child`` for parent clients).
     """
     # D-21 — child selection for ParentClient lives in api/fetcher.py, not in
     # api/client.py (build_client). Phase 3's coordinator decides which child
     # to fetch and passes the index/identifier on each call.
+    #
+    # CR-06: route through set_active_child (CR-04's typed-error wrapper) so a
+    # CryptoError on a stale parent session surfaces as AuthError (caught by
+    # the coordinator's D-09 silent-recovery branch), the IP-suspended literal
+    # surfaces as RateLimitedError (Phase 5's circuit-breaker reads .reason),
+    # and every raw pronotepy message is passed through redact() (WR-05).
+    # Calling client.set_child directly here bypasses the typed-exception
+    # facade — the resulting raw PronoteAPIError would escape the surrounding
+    # try (it is OUTSIDE that block by design — the typed wrapper does its own
+    # error mapping) and propagate to HA's coordinator safety net as a generic
+    # UpdateFailed, defeating D-09 silent recovery for parent accounts.
     if isinstance(client, pronotepy.ParentClient) and child_index_or_identifier is not None:
-        client.set_child(child_index_or_identifier)
+        set_active_child(client, child_index_or_identifier)
 
     start = today - timedelta(days=7)
     end = today + timedelta(days=14)
