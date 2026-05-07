@@ -16,9 +16,11 @@ NO ``model`` field — ROADMAP Phase 4 success criterion #2 explicitly says
 the class-level model attribute lands in Phase 4. NO ``sw_version``, NO
 ``configuration_url`` in Phase 3.
 
-available: delegates to ``self.coordinator.last_update_success`` so a poll
-failure flips every entity to ``unavailable`` until the next successful
-refresh.
+available: WR-01 — we DO NOT override CoordinatorEntity.available. The base
+class already returns ``super().available and self.coordinator.last_update_success``;
+overriding it here with just ``self.coordinator.last_update_success`` would
+silently drop the ``super().available`` term, breaking any future subclass
+that sets ``_attr_available = False`` for a missing data slice.
 """
 
 from __future__ import annotations
@@ -58,7 +60,8 @@ class PronoteEntity(CoordinatorEntity["PronoteDataUpdateCoordinator"]):
             manufacturer="Pronote",
         )
 
-    @property
-    def available(self) -> bool:
-        """D-15 — coordinator failure -> entity unavailable."""
-        return self.coordinator.last_update_success
+    # WR-01: do NOT override .available — CoordinatorEntity.available already
+    # returns ``super().available and self.coordinator.last_update_success``.
+    # Overriding it would drop ``super().available`` and silently mis-handle
+    # any future subclass that sets ``_attr_available = False`` for a missing
+    # data slice.
