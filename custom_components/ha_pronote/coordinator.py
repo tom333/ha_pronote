@@ -107,8 +107,22 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         except (CommunicationError, PronoteIntegrationError) as err:
             raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05
 
-        await self._capture_session()  # D-06
+        # CR-03: state updates BEFORE side-effects that may fail. The previous
+        # ordering (capture-session first, _previous_snapshot last) discarded a
+        # successful fetch when export_credentials() raised, flipping every
+        # entity to unavailable AND leaving _previous_snapshot stuck on the
+        # prior poll — Phase 4's diff layer would later compare an out-of-date
+        # baseline and emit phantom "changed lessons" notifications.
         self._previous_snapshot = snapshot  # C-03
+
+        # CR-03 / CR-05: token capture is best-effort. A token-write hiccup
+        # must NEVER invalidate a successful poll. _capture_session has its own
+        # try/except (CR-05); this outer guard is a belt-and-braces hedge.
+        try:
+            await self._capture_session()  # D-06
+        except Exception:  # noqa: BLE001 — defensive: any failure is non-fatal.
+            _LOGGER.warning("Failed to persist session token; will retry next poll", exc_info=True)
+
         return snapshot
 
     async def _recover_from_auth_error(
@@ -168,10 +182,19 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         return snapshot
 
     async def _capture_session(self) -> None:
-        """D-06: call client.export_credentials() in executor, write to entry.data."""
+        """D-06: persist export_credentials() to entry.data; non-fatal on failure (CR-05)."""
         entry = self.config_entry
         if entry is None:
             return
-        new_session = await self.hass.async_add_executor_job(self._client.export_credentials)
+        # CR-05: pronotepy 2.14.6 Client.export_credentials is a thin getter
+        # today, but it iterates internal state — a half-initialized client
+        # (e.g. mid-recovery race) could surface an unhandled KeyError. We
+        # treat token capture as best-effort: log and continue so a transient
+        # failure never breaks the poll's success.
+        try:
+            new_session = await self.hass.async_add_executor_job(self._client.export_credentials)
+        except Exception:  # noqa: BLE001 — token capture must never break a successful poll.
+            _LOGGER.warning("export_credentials() failed; keeping prior session token", exc_info=True)
+            return
         if new_session != entry.data.get("session"):
             self.hass.config_entries.async_update_entry(entry, data={**entry.data, "session": new_session})

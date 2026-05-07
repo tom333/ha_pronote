@@ -344,3 +344,44 @@ async def test_recovery_auth_failed_again_raises_config_entry_auth_failed(
         pytest.raises(ConfigEntryAuthFailed),
     ):
         await coordinator._async_update_data()  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# CR-03 / CR-05: a token-write failure must NOT invalidate a successful poll.
+# ---------------------------------------------------------------------------
+
+
+async def test_export_credentials_failure_does_not_invalidate_poll(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """CR-03 / CR-05: export_credentials() raises -> poll still succeeds.
+
+    The freshly-fetched snapshot must land on coordinator.data,
+    last_update_success must be True, and _previous_snapshot must be updated
+    so Phase 4's diff baseline stays in sync.
+    """
+    today = date(2026, 5, 7)
+    snapshot = snapshot_with_n_lessons_today(today, n=2)
+    mock_pronote_client.export_credentials.side_effect = RuntimeError("transient export failure")
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    assert coordinator.last_update_success is True
+    assert coordinator.data is snapshot
+    assert coordinator._previous_snapshot is snapshot  # noqa: SLF001 — C-03 baseline locked
