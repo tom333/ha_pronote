@@ -138,3 +138,44 @@ def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 
         ) from err
     except OSError as err:
         raise CommunicationError(redact(str(err))) from err  # WR-05
+
+
+def set_active_child(client: pronotepy.ParentClient, child_index: int) -> None:
+    """Apply a parent's child selection with our typed-error mapping (CR-04).
+
+    Wraps ``client.set_child(child_index)`` so callers don't have to know
+    about the underlying pronotepy exception classes. Mirrors the error
+    mapping used by ``build_client`` / ``build_or_resume_client``:
+
+    - ``pronotepy.exceptions.CryptoError`` -> ``AuthError`` (session expired
+      between login and child selection — D-09's silent-recovery loop will
+      catch this and trigger a fresh re-login).
+    - ``pronotepy.PronoteAPIError`` containing the IP-suspended literal ->
+      ``RateLimitedError`` (D-22 — Phase 5's circuit-breaker reads ``.reason``).
+    - any other ``pronotepy.PronoteAPIError`` -> ``CommunicationError``
+      (with ``ErrorReason.PROTOCOL_BROKEN``).
+    - ``OSError`` -> ``CommunicationError`` (transient network).
+
+    All raw exception messages are passed through ``redact()`` (WR-05).
+
+    Args:
+        client: Live ``pronotepy.ParentClient`` (the only client class with
+            ``set_child``).
+        child_index: 0-based index into ``client.children``.
+
+    Raises:
+        AuthError: see above.
+        RateLimitedError: see above.
+        CommunicationError: see above.
+    """
+    try:
+        client.set_child(child_index)
+    except pronotepy.exceptions.CryptoError as err:
+        raise AuthError(redact(str(err))) from err
+    except pronotepy.PronoteAPIError as err:
+        msg = redact(str(err))
+        if _IP_SUSPENDED_LITERAL in str(err):
+            raise RateLimitedError(msg) from err
+        raise CommunicationError(msg, reason=ErrorReason.PROTOCOL_BROKEN) from err
+    except OSError as err:
+        raise CommunicationError(redact(str(err))) from err

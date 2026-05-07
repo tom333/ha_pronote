@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
-from .api import AuthError, PronoteIntegrationError
+from .api import AuthError, PronoteIntegrationError, set_active_child
 from .api.client import build_or_resume_client
 from .const import DEFAULT_SCHOOL_TZ, DOMAIN, PLATFORMS
 from .coordinator import PronoteDataUpdateCoordinator
@@ -65,9 +65,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> b
 
     # D-08: parent accounts ship a child_index — apply it before the first fetch
     # so coordinator.data is scoped to the chosen child from the very first poll.
+    # CR-04: set_active_child wraps client.set_child with our typed-error mapping
+    # so a CryptoError / PronoteAPIError surfaces as ConfigEntryAuthFailed or
+    # ConfigEntryNotReady (below) rather than escaping as a raw pronotepy traceback.
     child_index = entry.data.get("child_index")
     if child_index is not None and hasattr(client, "set_child"):
-        await hass.async_add_executor_job(client.set_child, child_index)
+        try:
+            await hass.async_add_executor_job(set_active_child, client, child_index)
+        except AuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except PronoteIntegrationError as err:
+            raise ConfigEntryNotReady(str(err)) from err
 
     coordinator = PronoteDataUpdateCoordinator(
         hass,

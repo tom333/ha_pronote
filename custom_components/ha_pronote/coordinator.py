@@ -32,7 +32,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator, UpdateFailed
 import homeassistant.util.dt as dt_util
 
-from .api import AuthError, CommunicationError, PronoteIntegrationError, RateLimitedError, fetch_all
+from .api import AuthError, CommunicationError, PronoteIntegrationError, RateLimitedError, fetch_all, set_active_child
 from .api.client import build_or_resume_client
 from .const import DEFAULT_REFRESH_INTERVAL, DOMAIN
 
@@ -126,8 +126,11 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
                 )
             )
             # ParentClient: re-apply the chosen child before fetch.
+            # CR-04: set_active_child wraps client.set_child with typed-error
+            # mapping so a CryptoError on this call surfaces as AuthError (caught
+            # by the existing except arm below) instead of leaking pronotepy.
             if self._child_index is not None and hasattr(new_client, "set_child"):
-                await self.hass.async_add_executor_job(new_client.set_child, self._child_index)
+                await self.hass.async_add_executor_job(set_active_child, new_client, self._child_index)
             self._client = new_client
             snapshot = await self.hass.async_add_executor_job(
                 partial(

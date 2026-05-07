@@ -18,7 +18,7 @@ for the token round-trip (AUTH-04, PC-02-04). Adding an
 layer to HA's storage concerns; resist the temptation.
 """
 
-from .client import build_client, build_or_resume_client
+from .client import build_client, build_or_resume_client, set_active_child
 from .errors import (
     AuthError,
     CommunicationError,
@@ -46,4 +46,5 @@ __all__ = [
     "build_or_resume_client",
     "fetch_all",
     "redact",
+    "set_active_child",
 ]

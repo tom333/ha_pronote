@@ -40,7 +40,14 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
-from .api import AuthError, CommunicationError, PronoteIntegrationError, RateLimitedError, build_client
+from .api import (
+    AuthError,
+    CommunicationError,
+    PronoteIntegrationError,
+    RateLimitedError,
+    build_client,
+    set_active_child,
+)
 from .const import DOMAIN
 
 _USER_SCHEMA = vol.Schema(
@@ -122,7 +129,9 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
             if child_index is None:
                 # parent with exactly one child -- implicit pick.
                 child_index = 0
-            await self.hass.async_add_executor_job(self._client.set_child, child_index)
+            # CR-04: set_active_child wraps with typed-error mapping; WR-06's
+            # try/except below routes any failure back to a form error.
+            await self.hass.async_add_executor_job(set_active_child, self._client, child_index)
             child = self._client.children[child_index]
             child_name = child.name
             child_pronote_identifier = child.identifier
