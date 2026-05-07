@@ -1,8 +1,9 @@
 """Typed runtime_data payload for HA-Pronote ConfigEntries (D-21).
 
-D-21 — runtime_data, NOT hass.data[DOMAIN]. The dataclass holds the live
-``pronotepy.Client`` so the coordinator can call ``client.export_credentials()``
-between polls and reuse the client without rebuilding (Anti-Pattern 7).
+D-21 — runtime_data, NOT the legacy ``hass.data[<domain>]`` global registry
+(Anti-Pattern 6). The dataclass holds the live ``pronotepy.Client`` so the
+coordinator can call ``client.export_credentials()`` between polls and reuse
+the client without rebuilding (Anti-Pattern 7).
 
 NOT frozen: ``client`` is reassigned by the coordinator on D-09 silent-recovery
 when a mid-poll AuthError triggers a single fresh re-login.

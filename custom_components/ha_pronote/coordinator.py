@@ -14,7 +14,7 @@ D-09: mid-poll AuthError -> single fresh re-login + retry; second failure ->
 C-03: previous Snapshot stashed on self._previous_snapshot (Phase 4 reads).
 
 Banned (CLAUDE.md "What NOT to Use" + Phase 1 D-30..D-35):
-- No async_timeout (use asyncio.timeout if needed — not needed here).
+- No legacy timeout helper (use ``asyncio.timeout`` if needed — not needed here).
 - No pytz (zoneinfo.ZoneInfo only).
 - No direct requests (pronotepy via executor only).
 - No storing pronotepy.Client in coordinator.data (Anti-Pattern 7) — the live
