@@ -64,3 +64,27 @@ async def test_setup_entry_missing_required_key_raises_config_entry_not_ready(ha
     await hass.async_block_till_done()
     # ConfigEntryNotReady -> async_setup returns False; HA logs a clean message.
     assert result is False
+
+
+async def test_unload_entry_shuts_down_coordinator(hass, mock_config_entry, mock_pronote_client) -> None:
+    """WR-07: async_unload_entry must call coordinator.async_shutdown.
+
+    Without it the TimestampDataUpdateCoordinator keeps its scheduled refresh
+    alive until garbage-collected — and could fire one more poll AFTER unload,
+    violating CLAUDE.md 'politesse polling'.
+    """
+    mock_config_entry.add_to_hass(hass)
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    # async_shutdown is what cancels the scheduled refresh; stub it so we can
+    # observe the call without needing internal HA scheduler plumbing.
+    with patch.object(coordinator, "async_shutdown") as mock_shutdown:
+        assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert mock_shutdown.await_count + mock_shutdown.call_count >= 1

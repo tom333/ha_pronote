@@ -120,7 +120,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> b
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> bool:
-    """Unload all platforms and drop runtime_data (D-25)."""
+    """Unload all platforms and stop the coordinator's polling loop (D-25, WR-07).
+
+    WR-07: ``async_unload_platforms`` removes the entities, but
+    ``TimestampDataUpdateCoordinator`` keeps its scheduled refresh alive until
+    garbage-collected. Without ``async_shutdown`` the coordinator can fire one
+    more poll AFTER unload — a violation of CLAUDE.md "politesse polling".
+    """
+    coordinator = entry.runtime_data.coordinator
+    await coordinator.async_shutdown()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
