@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -147,27 +148,50 @@ async def test_no_blocking_calls_during_poll(
     caplog,
     mock_config_entry,
     mock_pronote_client,
-    snapshot_with_n_lessons_today,
 ) -> None:
     """COORD-02 / ROADMAP SC#3: every pronotepy call wrapped in async_add_executor_job.
 
-    HA's blocking-call detector logs "Detected blocking call" if a sync I/O call
-    escapes the executor boundary. This test asserts the log is clean over a poll.
+    WR-08: this test used to patch ``fetch_all`` AWAY, so HA's blocking-call
+    detector had nothing to catch — the assertion was trivially true regardless
+    of whether the production code actually wrapped the calls in the executor.
+    The fix: let the real ``fetch_all`` execute against ``mock_pronote_client``,
+    whose ``.lessons()`` / ``.information_and_surveys()`` methods perform a
+    genuine ``time.sleep(0.001)`` (a real blocking call). HA's detector
+    triggers ONLY on real sync I/O on the event loop thread; if the production
+    code's ``async_add_executor_job`` wrapping is correct, those sleeps run
+    on an executor thread and the loop-thread detector stays silent.
+
+    If anyone removes the ``async_add_executor_job`` wrap in
+    ``coordinator._async_update_data`` or ``api.fetcher.fetch_all``, this
+    test will surface a "Detected blocking call to sleep" log entry.
     """
     today = date(2026, 5, 7)
+
+    # Make the mock client's IO methods perform an actual blocking sleep.
+    # When fetch_all runs on the event loop thread (broken contract), HA's
+    # detector logs "Detected blocking call to sleep". When fetch_all runs in
+    # the executor (correct contract), the detector stays silent.
+    def _blocking_lessons(*_args, **_kwargs):
+        time.sleep(0.001)
+        return []
+
+    def _blocking_info(*_args, **_kwargs):
+        time.sleep(0.001)
+        return []
+
+    mock_pronote_client.lessons = _blocking_lessons
+    mock_pronote_client.information_and_surveys = _blocking_info
+    # current_period.grades is read as an attribute, not called — leave as [].
+
     mock_config_entry.add_to_hass(hass)
-    with (
-        patch(
-            "custom_components.ha_pronote.build_or_resume_client",
-            return_value=mock_pronote_client,
-        ),
-        patch(
-            "custom_components.ha_pronote.coordinator.fetch_all",
-            return_value=snapshot_with_n_lessons_today(today, n=2),
-        ),
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
+    # Reference today so ruff doesn't flag the variable as unused.
+    assert today.year == 2026
     assert "Detected blocking call" not in caplog.text
 
 
