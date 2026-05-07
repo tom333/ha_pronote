@@ -32,7 +32,15 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator, UpdateFailed
 import homeassistant.util.dt as dt_util
 
-from .api import AuthError, CommunicationError, PronoteIntegrationError, RateLimitedError, fetch_all, set_active_child
+from .api import (
+    AuthError,
+    CommunicationError,
+    PronoteIntegrationError,
+    RateLimitedError,
+    fetch_all,
+    redact,
+    set_active_child,
+)
 from .api.client import build_or_resume_client
 from .const import DEFAULT_REFRESH_INTERVAL, DOMAIN
 
@@ -95,9 +103,9 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             snapshot = await self._recover_from_auth_error(err, today)
         except RateLimitedError as err:
             # D-22 — IP_SUSPENDED -> UpdateFailed; Phase 5 reads .reason for backoff.
-            raise UpdateFailed(f"[{err.reason}] {err.message}") from err
+            raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05
         except (CommunicationError, PronoteIntegrationError) as err:
-            raise UpdateFailed(f"[{err.reason}] {err.message}") from err
+            raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05
 
         await self._capture_session()  # D-06
         self._previous_snapshot = snapshot  # C-03
@@ -141,8 +149,21 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
                     self._child_index,
                 )
             )
-        except (AuthError, PronoteIntegrationError) as err:
-            raise ConfigEntryAuthFailed(f"[{err.reason}] {err.message}") from err
+        # CR-02: D-22 mandates AuthError -> ConfigEntryAuthFailed (HA reauth) but
+        # RateLimitedError / CommunicationError -> UpdateFailed (HA retries on
+        # the next poll). The previous catch-all on PronoteIntegrationError
+        # mis-classified IP_SUSPENDED and transient network blips as auth
+        # failures, triggering spurious reauth flows and discarding the
+        # circuit-breaker signal Phase 5 needs.
+        except AuthError as err:
+            # Real auth failure on the retry — credentials genuinely invalid.
+            raise ConfigEntryAuthFailed(f"[{err.reason}] {redact(err.message)}") from err
+        except RateLimitedError as err:
+            # IP suspended during recovery — Phase 5's circuit-breaker reads .reason.
+            raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err
+        except (CommunicationError, PronoteIntegrationError) as err:
+            # Transient — HA retries on next poll.
+            raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err
 
         return snapshot
 
