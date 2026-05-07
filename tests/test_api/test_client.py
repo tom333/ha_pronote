@@ -5,7 +5,14 @@ from __future__ import annotations
 import pronotepy
 import pytest
 
-from custom_components.ha_pronote.api import AuthError, CommunicationError, ErrorReason, RateLimitedError, build_client
+from custom_components.ha_pronote.api import (
+    AuthError,
+    CommunicationError,
+    ErrorReason,
+    RateLimitedError,
+    build_client,
+    set_active_child,
+)
 
 
 def _make_init_raising(exc: BaseException):
@@ -109,3 +116,57 @@ def test_auth_error_chains_original_via_from(monkeypatch):
     with pytest.raises(AuthError) as excinfo:
         build_client("https://example.com/pronote/eleve.html", "eleve", "u", "p")
     assert excinfo.value.__cause__ is original
+
+
+# ---------------------------------------------------------------------------
+# CR-04: set_active_child wraps client.set_child with the typed-error mapping
+# so the 3 call sites (__init__.py, coordinator.py, config_flow.py) never see
+# raw pronotepy exceptions.
+# ---------------------------------------------------------------------------
+
+
+class _FakeParentClient:
+    """Stand-in for pronotepy.ParentClient.set_child with a programmable raise."""
+
+    def __init__(self, raise_exc: BaseException | None = None) -> None:
+        self._raise = raise_exc
+        self.last_index: int | None = None
+
+    def set_child(self, index: int) -> None:
+        self.last_index = index
+        if self._raise is not None:
+            raise self._raise
+
+
+def test_set_active_child_passes_index_through_on_success():
+    fake = _FakeParentClient()
+    set_active_child(fake, 2)
+    assert fake.last_index == 2
+
+
+def test_set_active_child_maps_crypto_error_to_auth_error():
+    fake = _FakeParentClient(raise_exc=pronotepy.exceptions.CryptoError("session torn"))
+    with pytest.raises(AuthError) as excinfo:
+        set_active_child(fake, 0)
+    assert excinfo.value.reason == ErrorReason.AUTH_FAILED
+
+
+def test_set_active_child_maps_ip_suspended_to_rate_limited():
+    fake = _FakeParentClient(raise_exc=pronotepy.PronoteAPIError("Your IP address is suspended for 24h"))
+    with pytest.raises(RateLimitedError) as excinfo:
+        set_active_child(fake, 0)
+    assert excinfo.value.reason == ErrorReason.IP_SUSPENDED
+
+
+def test_set_active_child_maps_other_pronote_error_to_communication_error():
+    fake = _FakeParentClient(raise_exc=pronotepy.PronoteAPIError("Schema drift"))
+    with pytest.raises(CommunicationError) as excinfo:
+        set_active_child(fake, 0)
+    assert excinfo.value.reason == ErrorReason.PROTOCOL_BROKEN
+
+
+def test_set_active_child_maps_os_error_to_communication_error():
+    fake = _FakeParentClient(raise_exc=OSError("network down"))
+    with pytest.raises(CommunicationError) as excinfo:
+        set_active_child(fake, 0)
+    assert excinfo.value.reason == ErrorReason.SERVER_DOWN
