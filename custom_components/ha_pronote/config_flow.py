@@ -38,6 +38,7 @@ from slugify import slugify
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
 from .api import AuthError, CommunicationError, PronoteIntegrationError, RateLimitedError, build_client
 from .const import DOMAIN
@@ -47,7 +48,8 @@ _USER_SCHEMA = vol.Schema(
         vol.Required("url"): vol.Url(),  # D-03
         vol.Required("account_type"): vol.In(["eleve", "parent"]),
         vol.Required("username"): str,
-        vol.Required("password"): str,
+        # CR-01: password rendered as masked input in HA frontend.
+        vol.Required("password"): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
     }
 )
 
