@@ -1,0 +1,40 @@
+---
+status: partial
+phase: 03-coordinator-first-sensor
+source: [03-VERIFICATION.md]
+started: 2026-05-07T03:00:00Z
+updated: 2026-05-07T03:00:00Z
+---
+
+## Current Test
+
+[awaiting human testing]
+
+## Tests
+
+### 1. Live HA install end-to-end — config flow add + password-masking spot-check (CR-01)
+expected: Wrong password produces `invalid_auth` error in form (no entry persisted). On valid creds, entry appears with title `<child_name> (<account_type>)`. **Visual: password field MUST be masked.**
+result: [pending]
+
+### 2. HA restart — entry resumes without re-auth + Pronote app device visibility (SC#2)
+expected: After restart, no UI prompt; `sensor.pronote_<child>_lessons_today` resumes its numeric state on the next poll. In the Pronote app, a connected device named `home-assistant-<8 hex>` is visible (manually revocable).
+result: [pending]
+
+### 3. HA log inspection — zero "Detected blocking call" warnings during a poll (SC#3)
+expected: No `Detected blocking call` lines emitted by HA's runtime detector during `async_setup_entry` first_refresh nor on the next 30-min polling cycle. (WR-08 makes the automated `test_no_blocking_calls_during_poll` non-substantive — empirical log proof needed.)
+result: [pending]
+
+### 4. CI run — full HA-side test suite under Python 3.14.2 / HA 2026.4.x
+expected: All 31 tests pass: `pytest tests/test_init.py tests/test_config_flow.py tests/test_coordinator.py tests/test_sensor.py tests/test_token_persistence.py`. Local env (Python 3.13.9) cannot run these — conftest imports `MockConfigEntry` which needs PHACC + HA 3.14.
+result: [pending]
+
+## Summary
+
+total: 4
+passed: 0
+issues: 0
+pending: 4
+skipped: 0
+blocked: 0
+
+## Gaps
