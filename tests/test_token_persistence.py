@@ -86,6 +86,39 @@ def test_build_or_resume_client_falls_back_on_pronote_api_error(monkeypatch):
     assert client is not None
 
 
+def test_build_or_resume_client_token_login_ip_suspended_raises_rate_limited(monkeypatch):
+    """WR-03 — token_login raising 'IP suspended' MUST short-circuit to RateLimitedError.
+
+    The fast-path's PronoteAPIError handler used to swallow every API error and
+    fall through to a fresh-login HTTP request — which then hits the same
+    banned IP and extends the suspension window. The fix raises RateLimitedError
+    BEFORE the fresh-login attempt; the assertion that fresh init was never
+    invoked locks the no-second-request contract.
+    """
+    fresh_init_called = False
+
+    def _token_login(cls, *_a, **_kw):
+        raise pronotepy.PronoteAPIError("Your IP address is suspended for 24h")
+
+    def _fresh_init(self, *_args, **_kw):
+        nonlocal fresh_init_called
+        fresh_init_called = True
+
+    monkeypatch.setattr(pronotepy.Client, "token_login", classmethod(_token_login))
+    monkeypatch.setattr(pronotepy.Client, "__init__", _fresh_init)
+
+    with pytest.raises(RateLimitedError):
+        build_or_resume_client(
+            "https://example.com/pronote/eleve.html",
+            "eleve",
+            "u",
+            "p",
+            session={"token": "stale"},
+            device_name="home-assistant-deadbeef",
+        )
+    assert fresh_init_called is False, "WR-03: must NOT issue a fresh-login HTTP request to a banned IP"
+
+
 def test_build_or_resume_client_falls_back_on_os_error(monkeypatch):
     """D-07 — token_login raises OSError -> fresh login attempted."""
 

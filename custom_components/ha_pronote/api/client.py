@@ -105,8 +105,16 @@ def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 
             )
         except pronotepy.exceptions.CryptoError:
             pass  # stale session — fall through to fresh login.
-        except pronotepy.PronoteAPIError:
-            pass  # token_login failed for non-auth reasons — try fresh login.
+        except pronotepy.PronoteAPIError as err:
+            # WR-03: if the server already says "IP suspended" during token_login,
+            # do NOT retry with a fresh-login HTTP request to the same banned IP —
+            # that extends the suspension window (CLAUDE.md "politesse polling").
+            # Surface the rate-limit signal so the coordinator's UpdateFailed path
+            # (and Phase 5's circuit-breaker) can back off instead of hammering
+            # the school server.
+            if _IP_SUSPENDED_LITERAL in str(err):
+                raise RateLimitedError(redact(str(err))) from err
+            # Other API errors — fresh login may still work.
         except OSError:
             pass  # transient network — fresh login may still succeed.
 
