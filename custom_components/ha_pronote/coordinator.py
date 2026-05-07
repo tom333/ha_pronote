@@ -124,6 +124,14 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
                 ) from err
             self._last_recovery_at = now
             snapshot = await self._recover_from_auth_error(err, today)
+            # WR-09: a successful recovery PROVES the AuthError was real auth
+            # (not the aliased soft-rate-limit Pitfall 2 hedges against), so
+            # clear the cooldown — a subsequent genuine auth failure must be
+            # free to trigger ConfigEntryAuthFailed instead of being swallowed
+            # by the 5-minute window. If _recover_from_auth_error raises, this
+            # line is skipped and the timestamp set above remains in place to
+            # block the next aliased-loop attempt (the WR-04 contract).
+            self._last_recovery_at = None
         except RateLimitedError as err:
             # D-22 — IP_SUSPENDED -> UpdateFailed; Phase 5 reads .reason for backoff.
             raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05

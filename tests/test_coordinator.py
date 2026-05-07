@@ -468,3 +468,118 @@ async def test_recovery_cooldown_skips_back_to_back_auth_errors(
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()  # noqa: SLF001
         assert mock_build.call_count == 0, "WR-04: must NOT issue a recovery login during cooldown"
+
+
+# ---------------------------------------------------------------------------
+# WR-09: a SUCCESSFUL silent recovery clears the cooldown so a subsequent
+# genuine auth failure within the 5-minute window is NOT swallowed. WR-04's
+# cooldown is meant to block aliased-AuthError loops (Pitfall 2), not real
+# credential rotations that happen to land within 5 minutes of a prior
+# session expiry.
+# ---------------------------------------------------------------------------
+
+
+async def test_successful_recovery_clears_cooldown(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """WR-09: after _recover_from_auth_error succeeds, _last_recovery_at must
+    be cleared so the cooldown gate does not block a subsequent genuine
+    AuthError. Without the clear, a real password rotation within 5 minutes
+    of a session expiry would silently UpdateFailed instead of triggering
+    reauth via ConfigEntryAuthFailed."""
+    today = date(2026, 5, 7)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+
+    fresh_client = MagicMock()
+    fresh_client.set_child = MagicMock()
+    fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
+
+    # Drive a recovery path: AuthError on initial fetch, retry succeeds.
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=[
+                AuthError("session expired"),
+                snapshot_with_n_lessons_today(today, n=2),
+            ],
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    # WR-09: the success path MUST clear the cooldown timestamp.
+    assert coordinator._last_recovery_at is None, (  # noqa: SLF001
+        "WR-09: successful recovery must clear _last_recovery_at"
+    )
+
+
+async def test_genuine_auth_failure_after_successful_recovery_is_not_swallowed(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """WR-09: a SECOND AuthError that lands within 5 minutes of a successful
+    recovery (e.g. user actually rotated their Pronote password) MUST trigger
+    a fresh recovery attempt — not be swallowed by the cooldown gate. The
+    behavioural proof: build_or_resume_client IS called a second time, and
+    the genuine auth-failed retry surfaces ConfigEntryAuthFailed (HA reauth)
+    rather than UpdateFailed (silent skip)."""
+    today = date(2026, 5, 7)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+
+    fresh_client = MagicMock()
+    fresh_client.set_child = MagicMock()
+    fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
+
+    # Poll N: AuthError -> recovery succeeds (cooldown should be cleared).
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=[
+                AuthError("session expired"),
+                snapshot_with_n_lessons_today(today, n=2),
+            ],
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ) as mock_build_n,
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+        assert mock_build_n.call_count == 1
+
+    # Poll N+1 (immediately after): AuthError + retry-AuthError ->
+    # ConfigEntryAuthFailed. Without WR-09's clear, the cooldown would
+    # short-circuit to UpdateFailed before recovery even started, hiding the
+    # genuine credential failure from HA's reauth flow.
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=[
+                AuthError("credentials rotated"),
+                AuthError("credentials still bad"),
+            ],
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ) as mock_build_n_plus_1,
+        pytest.raises(ConfigEntryAuthFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    assert mock_build_n_plus_1.call_count == 1, (
+        "WR-09: cleared cooldown must allow a fresh recovery attempt — "
+        "build_or_resume_client should be called once for the second AuthError"
+    )
