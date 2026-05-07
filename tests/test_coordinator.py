@@ -385,3 +385,62 @@ async def test_export_credentials_failure_does_not_invalidate_poll(
     assert coordinator.last_update_success is True
     assert coordinator.data is snapshot
     assert coordinator._previous_snapshot is snapshot  # noqa: SLF001 — C-03 baseline locked
+
+
+# ---------------------------------------------------------------------------
+# WR-04: silent recovery is gated by a 5-minute cooldown so an aliased AuthError
+# loop does NOT issue a fresh-login HTTP request to the same banned IP every
+# poll.
+# ---------------------------------------------------------------------------
+
+
+async def test_recovery_cooldown_skips_back_to_back_auth_errors(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """WR-04: a second AuthError within the cooldown window must NOT re-login."""
+    today = date(2026, 5, 7)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+
+    fresh_client = MagicMock()
+    fresh_client.set_child = MagicMock()
+    fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
+
+    # First recovery: AuthError on initial fetch -> recovery rebuilds client
+    # and the retry succeeds. _last_recovery_at is now set.
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=[
+                AuthError("session expired"),
+                snapshot_with_n_lessons_today(today, n=2),
+            ],
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ) as mock_build,
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+        assert mock_build.call_count == 1
+
+    # Second poll, also AuthError, within the 5-minute cooldown: recovery
+    # path MUST short-circuit to UpdateFailed without invoking
+    # build_or_resume_client a second time.
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=AuthError("aliased rate-limit"),
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ) as mock_build,
+    ):
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()  # noqa: SLF001
+        assert mock_build.call_count == 0, "WR-04: must NOT issue a recovery login during cooldown"

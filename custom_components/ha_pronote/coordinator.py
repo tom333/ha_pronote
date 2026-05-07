@@ -24,6 +24,7 @@ Banned (CLAUDE.md "What NOT to Use" + Phase 1 D-30..D-35):
 
 from __future__ import annotations
 
+from datetime import timedelta
 from functools import partial
 import logging
 from typing import TYPE_CHECKING
@@ -44,8 +45,16 @@ from .api import (
 from .api.client import build_or_resume_client
 from .const import DEFAULT_REFRESH_INTERVAL, DOMAIN
 
+# WR-04: cooldown applied between consecutive silent-recovery attempts to
+# avoid hammering an IP that is already being suspended by Pronote (Pitfall 2:
+# AuthError + RateLimitedError can alias when a soft-rate-limit comes back as
+# a junk auth response that pronotepy decodes as a CryptoError). 5 minutes
+# matches Phase 5's reserved short-backoff target without needing the
+# circuit-breaker to be wired.
+_SILENT_RECOVERY_COOLDOWN = timedelta(minutes=5)
+
 if TYPE_CHECKING:
-    from datetime import date
+    from datetime import date, datetime
     from zoneinfo import ZoneInfo
 
     import pronotepy
@@ -84,6 +93,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         self._child_index = child_index  # for ParentClient.set_child (D-08)
         self._school_tz = school_tz  # D-23
         self._previous_snapshot: Snapshot | None = None  # C-03 — Phase 4 reads
+        self._last_recovery_at: datetime | None = None  # WR-04 cooldown gate
 
     async def _async_update_data(self) -> Snapshot:
         """Fetch a Snapshot via executor; capture session token on success (D-19)."""
@@ -100,6 +110,19 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             )
         except AuthError as err:
             # D-09 — silent recovery: try ONE fresh re-login + retry the fetch.
+            # WR-04: gate the recovery behind a 5-minute cooldown. Pitfall 2
+            # acknowledges the AuthError <-> RateLimitedError overlap (a soft
+            # rate-limit can come back as a junk auth response decoded by
+            # pronotepy as a CryptoError); without the gate, an aliased
+            # exception loop would issue a second login HTTP request to the
+            # same banned IP every 30 minutes, extending the suspension and
+            # violating CLAUDE.md "politesse polling".
+            now = dt_util.utcnow()
+            if self._last_recovery_at is not None and now - self._last_recovery_at < _SILENT_RECOVERY_COOLDOWN:
+                raise UpdateFailed(
+                    f"[{err.reason}] auth recovery rate-limited; skipping this poll: {redact(err.message)}"
+                ) from err
+            self._last_recovery_at = now
             snapshot = await self._recover_from_auth_error(err, today)
         except RateLimitedError as err:
             # D-22 — IP_SUSPENDED -> UpdateFailed; Phase 5 reads .reason for backoff.
