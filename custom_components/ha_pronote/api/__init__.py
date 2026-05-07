@@ -18,7 +18,7 @@ for the token round-trip (AUTH-04, PC-02-04). Adding an
 layer to HA's storage concerns; resist the temptation.
 """
 
-from .client import build_client
+from .client import build_client, build_or_resume_client
 from .errors import AuthError, CommunicationError, ErrorReason, ParseError, PronoteIntegrationError, RateLimitedError
 from .fetcher import fetch_all
 from .models import Grade, Information, Lesson, Snapshot
@@ -35,5 +35,6 @@ __all__ = [
     "RateLimitedError",
     "Snapshot",
     "build_client",
+    "build_or_resume_client",
     "fetch_all",
 ]
