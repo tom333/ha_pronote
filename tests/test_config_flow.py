@@ -20,7 +20,9 @@ from custom_components.ha_pronote.api import (
     PronoteIntegrationError,
     RateLimitedError,
 )
+from custom_components.ha_pronote.config_flow import _USER_SCHEMA
 from custom_components.ha_pronote.const import DOMAIN
+from homeassistant.helpers.selector import TextSelector, TextSelectorType
 
 _USER_INPUT_ELEVE = {
     "url": "https://example.com/pronote/eleve.html",
@@ -147,3 +149,66 @@ async def test_already_configured_aborts(hass, mock_pronote_client) -> None:
         result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input=_USER_INPUT_ELEVE)
     assert result["type"] == "abort"
     assert result["reason"] == "already_configured"
+
+
+# ---------------------------------------------------------------------------
+# CR-01: password field must be a TextSelector(type=PASSWORD) so the HA
+# frontend masks the input.
+# ---------------------------------------------------------------------------
+
+
+def test_user_schema_masks_password_field() -> None:
+    """CR-01: password field declared with TextSelector(type=PASSWORD)."""
+    schema_dict = _USER_SCHEMA.schema
+    pw_validator = next(v for k, v in schema_dict.items() if str(k) == "password")
+    assert isinstance(pw_validator, TextSelector)
+    assert pw_validator.config["type"] == TextSelectorType.PASSWORD
+
+
+# ---------------------------------------------------------------------------
+# WR-06: set_active_child / export_credentials failures in _create_entry must
+# bubble through the D-04 mapping rather than escaping as 'Unknown error'.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected_reason"),
+    [
+        (AuthError("session torn"), "invalid_auth"),
+        (RateLimitedError("Your IP address is suspended"), "ip_suspended"),
+        (CommunicationError("network down"), "cannot_connect"),
+    ],
+)
+async def test_create_entry_set_active_child_error_aborts_with_mapped_reason(
+    hass, mock_parent_client_two_children, raised, expected_reason
+) -> None:
+    """WR-06: pronotepy.set_child failure surfaces as the D-04 abort reason."""
+    with (
+        patch(
+            "custom_components.ha_pronote.config_flow.build_client",
+            return_value=mock_parent_client_two_children,
+        ),
+        patch(
+            "custom_components.ha_pronote.config_flow.set_active_child",
+            side_effect=raised,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input=_USER_INPUT_PARENT)
+        # pick_child step.
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"child_index": "0"})
+    assert result["type"] == "abort"
+    assert result["reason"] == expected_reason
+
+
+async def test_create_entry_export_credentials_failure_aborts_cannot_connect(hass, mock_pronote_client) -> None:
+    """WR-06: export_credentials raising at flow time aborts with cannot_connect."""
+    mock_pronote_client.export_credentials.side_effect = RuntimeError("half-init")
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_client",
+        return_value=mock_pronote_client,
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input=_USER_INPUT_ELEVE)
+    assert result["type"] == "abort"
+    assert result["reason"] == "cannot_connect"
