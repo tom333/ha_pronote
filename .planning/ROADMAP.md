@@ -94,7 +94,7 @@ Plans:
 - [x] 03-03-PLAN.md — entity.py (PronoteEntity base) + sensor.py (PronoteLessonsTodaySensor — state-only, unique_id frozen, mdi:school + MEASUREMENT) (Wave 2, TIME-01 + ENT-02 + ENT-03)
 
 **Wave 3** *(blocked on Plans 01 + 02 + 03)*
-- [ ] 03-04-PLAN.md — Full HA-side test suite: conftest fixtures + test_init extension + test_config_flow + test_coordinator (incl. blocking-call detector for COORD-02/SC#3) + test_sensor + test_token_persistence (Wave 3, all 10 phase req IDs)
+- [x] 03-04-PLAN.md — Full HA-side test suite: conftest fixtures + test_init extension + test_config_flow + test_coordinator (incl. blocking-call detector for COORD-02/SC#3) + test_sensor + test_token_persistence (Wave 3, all 10 phase req IDs)
 
 **UI hint**: yes
 
