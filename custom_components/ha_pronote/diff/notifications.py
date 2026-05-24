@@ -1,33 +1,44 @@
-"""Information diff -- body lands in Phase 4 (D-02). Type contract locked here.
+"""Information diff -- first-poll skip + identity-key set difference (D-14, EVENT-03).
 
-Phase 2 ships ``NewInformation`` (in ``diff/events.py`` per C-01). Phase 4 fills
-this body. The function signature below freezes Phase 4's contract.
+Identity key per information: (info_id, date.date()) -- info_id is stable;
+Information.date is a tz-aware datetime, call .date() per C-03 decision
+(NewInformation.date is date not datetime -- ApexCharts granularity).
+First-poll invariant: diff_notifications(None, snapshot) -> [] (EVENT-04).
+
+No try/except -- diff bugs surface raw (project feedback: no silent exceptions).
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .events import NewInformation
+
 if TYPE_CHECKING:
     from custom_components.ha_pronote.api.models import Snapshot
 
-    from .events import NewInformation
 
-
-def diff_notifications(
-    previous: Snapshot | None,
-    new: Snapshot,
-) -> list[NewInformation]:
+def diff_notifications(previous: Snapshot | None, new: Snapshot) -> list[NewInformation]:
     """Return new informations since the previous poll.
 
-    Phase 2 stub. Phase 4 fills the body per D-02:
+    Args:
+        previous: Previous Snapshot, or None on first poll after restart.
+        new: Current Snapshot.
 
-    - first-poll skip: ``previous is None -> []``.
-    - identity key per information: ``(info_id, date)`` -- set difference.
-
-    Raises:
-        NotImplementedError: until Phase 4 ships.
+    Returns:
+        List of NewInformation events. Empty when previous is None (EVENT-04).
     """
-    raise NotImplementedError(
-        "diff_notifications body lands in Phase 4 (D-02). Phase 2 ships only the NewInformation dataclass contract."
-    )
+    if previous is None:
+        return []
+    prev_keys = {(i.info_id, i.date.date()) for i in previous.information}
+    return [
+        NewInformation(
+            info_id=i.info_id,
+            title=i.title,
+            sender=i.sender,
+            date=i.date.date(),  # C-03: Information.date is datetime; NewInformation.date is date
+            excerpt=i.excerpt,
+        )
+        for i in new.information
+        if (i.info_id, i.date.date()) not in prev_keys
+    ]
