@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Foundations & Skeleton** - HACS-compliant repo, CI gates, no-op `__init__.py` that loads in HA dev container
 - [ ] **Phase 2: API & Diff Layer (HA-free)** - Pure-Python `api/` (pronotepy wrapper) + `diff/` (lessons/grades/notifs) tested in plain pytest
 - [ ] **Phase 3: Coordinator & First Sensor** - End-to-end loop: Config Flow validates credentials, coordinator polls Pronote, one lessons-today sensor displays in HA
-- [ ] **Phase 4: Diff, Events & Full Sensor Suite** - The core value: typed bus events fire on schedule changes, plus full EDT/grades/notifs sensors and the calendar entity
+- [x] **Phase 4: Diff, Events & Full Sensor Suite** - The core value: typed bus events fire on schedule changes, plus full EDT/grades/notifs sensors and the calendar entity (completed 2026-05-24)
 - [ ] **Phase 5: Politesse — Adaptive Polling, Quiet Hours, Circuit Breaker** - Conservative defaults safe to install: NC-aware calendar, 17h–20h tighter polling, IP-ban circuit breaker
 - [ ] **Phase 6: Auth Lifecycle & Options** - Reauth, reconfigure, multi-child support, Options Flow — no entry ever bricks on password change
 - [ ] **Phase 7: Quality, Diagnostics & Distribution** - Diagnostics with redaction, repair issues, full translations, README, v0.1.0 HACS-installable tag
@@ -107,7 +107,7 @@ Plans:
   2. Each child has a HA Device with `manufacturer="Pronote"`, `model=<class level>`, grouping a timetable sensor (J + J+1 attributes), grades sensor (numeric `overall_average` state, ApexCharts-shaped attributes), notifications sensor (unread count + recent items), and a calendar entity exposing lessons J–7 → J+14 with cancelled lessons visually distinct
   3. CI fixture for a heavy class (50 lessons/week × 2 weeks, 100 grades) asserts every sensor's `len(state) <= 255` and `len(json.dumps(attributes)) <= 16384` — no sensor falls back to `unknown` and no recorder warning fires
   4. New grades and new informations emit `pronote_new_grade` and `pronote_new_information` events with documented payload schemas; comma-decimal Pronote averages (e.g. "14,5") are normalised to numeric `14.5` in state
-**Plans:** 3/7 plans executed
+**Plans:** 7/7 plans complete
 Plans:
 
 **Wave 1** *(no interdependencies — pure-Python work + fixture generation)*
@@ -116,12 +116,12 @@ Plans:
 - [x] 04-03-PLAN.md — Heavy fixture + probe: generate `tests/fixtures/synthetic/heavy_class.json` (126+ lessons, 100 grades, 30 infos); run `scripts/probe_config_flow.py` + fill `PHASE-4-PROBE-NOTES.md` — **autonomous: false** (Wave 1, TIME-03 + GRADE-03)
 
 **Wave 2** *(blocked on 04-02 + 04-03)*
-- [ ] 04-04-PLAN.md — Constants + entity: append Phase 4 constants to `const.py` (EVENT_*, CLASS_LEVEL_ATTR, NOTIFICATIONS_WINDOW, GRADE_COMMENT_MAX_LEN); replace PLATFORMS; extend `entity.py` device_info with `model=class_label or None` (Wave 2, ENT-01)
-- [ ] 04-05-PLAN.md — Full sensor suite: add `_to_float` helper; add `extra_state_attributes` to `PronoteLessonsTodaySensor`; add `PronoteGradesSensor` + `PronoteNotificationsSensor`; update `async_setup_entry`; CI attribute-size gate (Wave 2, TIME-02, TIME-03, GRADE-01, GRADE-02, GRADE-03, NOTIF-01, NOTIF-02)
-- [ ] 04-06-PLAN.md — Calendar platform: create `calendar.py` (`PronoteCalendar` with `event` property + `async_get_events` + cancelled-lesson formatting); CI size extension (Wave 2, CAL-01, CAL-02)
+- [x] 04-04-PLAN.md — Constants + entity: append Phase 4 constants to `const.py` (EVENT_*, CLASS_LEVEL_ATTR, NOTIFICATIONS_WINDOW, GRADE_COMMENT_MAX_LEN); replace PLATFORMS; extend `entity.py` device_info with `model=class_label or None` (Wave 2, ENT-01)
+- [x] 04-05-PLAN.md — Full sensor suite: add `_to_float` helper; add `extra_state_attributes` to `PronoteLessonsTodaySensor`; add `PronoteGradesSensor` + `PronoteNotificationsSensor`; update `async_setup_entry`; CI attribute-size gate (Wave 2, TIME-02, TIME-03, GRADE-01, GRADE-02, GRADE-03, NOTIF-01, NOTIF-02)
+- [x] 04-06-PLAN.md — Calendar platform: create `calendar.py` (`PronoteCalendar` with `event` property + `async_get_events` + cancelled-lesson formatting); CI size extension (Wave 2, CAL-01, CAL-02)
 
 **Wave 3** *(blocked on all prior plans)*
-- [ ] 04-07-PLAN.md — Coordinator event firing: capture `previous` before overwrite; add `_fire_diff_events`; wire `diff_grades` + `diff_notifications` + `diff_lessons`; 4 coordinator tests; full suite green (Wave 3, EVENT-01, EVENT-02, EVENT-03, EVENT-04)
+- [x] 04-07-PLAN.md — Coordinator event firing: capture `previous` before overwrite; add `_fire_diff_events`; wire `diff_grades` + `diff_notifications` + `diff_lessons`; 4 coordinator tests; full suite green (Wave 3, EVENT-01, EVENT-02, EVENT-03, EVENT-04)
 
 **UI hint**: yes
 
@@ -172,7 +172,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundations & Skeleton | 5/5 | Complete | 2026-05-03 |
 | 2. API & Diff Layer | 4/4 | Complete | 2026-05-06 |
 | 3. Coordinator & First Sensor | 0/4 | Not started | - |
-| 4. Diff, Events & Full Sensor Suite | 3/7 | In Progress|  |
+| 4. Diff, Events & Full Sensor Suite | 7/7 | Complete   | 2026-05-24 |
 | 5. Politesse | 0/TBD | Not started | - |
 | 6. Auth Lifecycle & Options | 0/TBD | Not started | - |
 | 7. Quality, Diagnostics & Distribution | 0/TBD | Not started | - |
