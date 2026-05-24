@@ -131,26 +131,16 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.hass.async_add_executor_job(set_active_child, self._client, child_index)
             child = self._client.children[child_index]
             child_name = child.name
-            child_pronote_identifier = child.identifier
         else:
             child_name = self._client.info.name
-            child_pronote_identifier = ""  # eleve: no separate identifier
 
-        base_slug = slugify(
-            child_name, separator="_"
-        )  # D-10 -- underscore separator (locks D-10/D-12/D-13 example slugs jean_dupont, alice_dupont)
-
-        # D-12 collision precheck: scan existing entries on this HA install for
-        # the same child_identifier value. If a collision is found, append the
-        # first 2 hex chars of the pronotepy child identifier.
-        existing_slugs = {
-            entry.data.get("child_identifier") for entry in self.hass.config_entries.async_entries(DOMAIN)
-        }
-        if base_slug in existing_slugs and child_pronote_identifier:
-            suffix = "".join(ch for ch in child_pronote_identifier.lower() if ch in "0123456789abcdef")[:2]
-            child_identifier = f"{base_slug}_{suffix}" if suffix else base_slug
-        else:
-            child_identifier = base_slug
+        # D-10 — underscore separator slug. D-12 collision-suffix logic was
+        # dropped: it relied on pronotepy `Child.identifier` which actually
+        # returns a `ClientInfo` object without an `identifier` attribute on
+        # this server. Reintroduce in Phase 6 once we have a live-fixture
+        # script (scripts/test_config_flow.py) that inspects real pronotepy
+        # output. With a single child the collision check is a no-op anyway.
+        child_identifier = slugify(child_name, separator="_")
 
         # D-05 unique_id: f"{url_host.lower()}:{username}:{child_identifier}"
         url_host = (urlparse(self._user_input["url"]).hostname or "").lower()
