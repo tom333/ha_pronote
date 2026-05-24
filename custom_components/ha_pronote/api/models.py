@@ -72,6 +72,16 @@ class Grade:
     out_of: str
     coefficient: str
     date: date
+    # Phase 4 additions — pronotepy attribute name → model field name mapping:
+    # raw.average → class_average  (pronotepy uses "average" for class avg, NOT "class_average")
+    # raw.max     → class_max
+    # raw.min     → class_min
+    # raw.comment → comment
+    # All default to "" so existing Phase 2 fixtures round-trip without change.
+    class_average: str = ""
+    class_min: str = ""
+    class_max: str = ""
+    comment: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-friendly dict."""
@@ -81,6 +91,10 @@ class Grade:
             "out_of": self.out_of,
             "coefficient": self.coefficient,
             "date": self.date.isoformat(),
+            "class_average": self.class_average,  # Phase 4
+            "class_min": self.class_min,           # Phase 4
+            "class_max": self.class_max,           # Phase 4
+            "comment": self.comment,               # Phase 4
         }
 
     @classmethod
@@ -92,6 +106,10 @@ class Grade:
             out_of=data["out_of"],
             coefficient=data["coefficient"],
             date=date.fromisoformat(data["date"]),
+            class_average=data.get("class_average", ""),  # Phase 4 — default "" for old fixtures
+            class_min=data.get("class_min", ""),
+            class_max=data.get("class_max", ""),
+            comment=data.get("comment", ""),
         )
 
 
@@ -139,6 +157,12 @@ class Snapshot:
     lessons: list[Lesson] = field(default_factory=list)
     grades: list[Grade] = field(default_factory=list)
     information: list[Information] = field(default_factory=list)
+    # Phase 4 additions — fetched alongside grades in executor (RESEARCH gap #5).
+    # Period.overall_average is a @property making a fresh HTTP call — MUST be
+    # fetched inside fetch_all (executor) and stored here. Sensor reads this string
+    # directly; never calls Period.overall_average from native_value (PITFALL 3).
+    overall_average: str = ""  # Period.overall_average comma-string e.g. "14,50"; "-1" = no grades
+    period_name: str = ""      # Period.name e.g. "Trimestre 2"
 
     @property
     def lessons_today(self) -> list[Lesson]:
@@ -159,6 +183,8 @@ class Snapshot:
             "lessons": [lesson.to_dict() for lesson in self.lessons],
             "grades": [grade.to_dict() for grade in self.grades],
             "information": [info.to_dict() for info in self.information],
+            "overall_average": self.overall_average,  # Phase 4
+            "period_name": self.period_name,           # Phase 4
         }
 
     @classmethod
@@ -170,4 +196,6 @@ class Snapshot:
             lessons=[Lesson.from_dict(item) for item in data["lessons"]],
             grades=[Grade.from_dict(item) for item in data["grades"]],
             information=[Information.from_dict(item) for item in data["information"]],
+            overall_average=data.get("overall_average", ""),  # Phase 4 — default for pre-Phase-4 fixtures
+            period_name=data.get("period_name", ""),
         )
