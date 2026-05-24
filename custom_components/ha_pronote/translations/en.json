@@ -1,0 +1,53 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Pronote",
+        "data": {
+          "url": "Pronote space URL",
+          "account_type": "Account type",
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "url": "Full URL of your Pronote space (e.g. https://0123456a.index-education.net/pronote/eleve.html).",
+          "account_type": "'eleve' for the student's account, 'parent' for the parent portal."
+        }
+      },
+      "pick_child": {
+        "title": "Select child",
+        "description": "Your Pronote account has multiple children. Choose which one to add. To add another child, run the integration setup again.",
+        "data": {
+          "child_index": "Child"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials. Check your username and password.",
+      "cannot_connect": "Cannot reach Pronote. Check the URL and your network.",
+      "ip_suspended": "Your IP address has been temporarily suspended by Pronote. Wait a few minutes before retrying.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This Pronote account / child is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "lessons_today": {
+        "name": "Lessons today"
+      },
+      "grades": {
+        "name": "Notes"
+      },
+      "notifications": {
+        "name": "Notifications"
+      }
+    },
+    "calendar": {
+      "calendar": {
+        "name": "Emploi du temps"
+      }
+    }
+  }
+}

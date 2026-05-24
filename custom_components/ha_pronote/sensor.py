@@ -150,10 +150,12 @@ class PronoteGradesSensor(PronoteEntity, SensorEntity):
         comment capped at GRADE_COMMENT_MAX_LEN chars (T-04-2 mitigation — D-04).
         float values use _to_float() (comma-to-dot normalisation).
         """
-        from .const import GRADE_COMMENT_MAX_LEN
+        from .const import GRADE_COMMENT_MAX_LEN, GRADES_WINDOW
 
         data = self.coordinator.data
-        grades = sorted(data.grades, key=lambda g: g.date, reverse=True)  # D-06: newest first
+        # D-06: newest first. D-04 (UAT-revised): cap at GRADES_WINDOW so the
+        # 9-field schema fits under the 16 KiB recorder cap on heavy fixtures.
+        grades = sorted(data.grades, key=lambda g: g.date, reverse=True)[:GRADES_WINDOW]
         return {
             "period_name": data.period_name,
             "grades": [

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import homeassistant.util.dt as dt_util
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-from homeassistant.util.slugify import slugify  # D-09 uid contract — use HA slugify not python_slugify
+from homeassistant.util import slugify  # D-09 uid contract — HA slugify, NOT python-slugify
 
 from .entity import PronoteEntity
 

@@ -48,6 +48,13 @@ filterwarnings = [
     "error",
     # Ignore pronotepy / autoslot deprecation warnings if any surface
     # "ignore::DeprecationWarning:autoslot",
+    # Phase 4 — HA Core 2026.4.x http/__init__.py:432 still sets app["hass"]
+    # (dict-key form); aiohttp >=3.10 raises NotAppKeyWarning which PHACC
+    # promotes to error via the "error" filter above, breaking
+    # async_setup_component(hass, "http", {}). Our Phase 4 calendar platform
+    # depends on http — ignore this specific upstream warning so http setup
+    # completes and calendar registers.
+    "ignore::aiohttp.web_exceptions.NotAppKeyWarning",
 ]
 
 [tool.coverage.run]

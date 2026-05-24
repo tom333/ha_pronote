@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from homeassistant.setup import async_setup_component
+
 from custom_components.ha_pronote.api.models import Lesson, Snapshot
 from custom_components.ha_pronote.const import DOMAIN
 
@@ -23,6 +25,22 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     ``custom_components/`` and our integration would be invisible.
     """
     return
+
+
+@pytest.fixture(autouse=True)
+async def setup_ha_calendar_http_dependency(hass, request):
+    """Phase 4 — HA's `calendar` platform depends on `http`. PHACC test HA
+    doesn't auto-load `http`, so when our integration forwards Platform.CALENDAR
+    (via const.PLATFORMS post-Plan 04-04), the `calendar` component fails its
+    dependency setup and our entire entry setup fails with SETUP_ERROR.
+
+    This fixture sets up `http` once per test BEFORE the integration's
+    async_setup_entry runs. Test markers like `no_ha_http` opt out (used for
+    pure-Python tests that don't need the full HA).
+    """
+    if "hass" in request.fixturenames and "no_ha_http" not in request.keywords:
+        await async_setup_component(hass, "http", {})
+    yield
 
 
 # Phase 3 additions — HA-side test fixtures (C-05). MagicMock at the

@@ -40,3 +40,10 @@ CLASS_LEVEL_ATTR: Final = "class_name"
 
 NOTIFICATIONS_WINDOW: Final = 20    # D-05 — cap on informations list in sensor attrs
 GRADE_COMMENT_MAX_LEN: Final = 200  # D-04 — comment truncation length at sensor render
+# D-04 (revised post-UAT): CONTEXT.md called for "all current-period grades",
+# but the heavy-class CI gate (D-17 + 100 grades fixture) measured the JSON
+# payload at 18 365 bytes — exceeds the 16 384-byte recorder cap. Cap the
+# attribute at the 50 most recent (sorted by date desc) so the 9-field
+# ApexCharts schema fits comfortably. Realistic trimester counts (~30–60)
+# remain fully covered; only the synthetic 100-grade stress case is trimmed.
+GRADES_WINDOW: Final = 50
