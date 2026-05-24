@@ -762,19 +762,22 @@ Phase 4 is a greenfield code-only addition. No renaming, no data migration, no e
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Grade extended attributes: extend `models.Grade` + `fetcher._grade_from_raw`, or inline at sensor render time?**
+   - **RESOLVED:** Option A — extend `models.Grade` (add `class_average / class_min / class_max / comment` with `= ""` defaults) and update `_grade_from_raw` to map pronotepy's `average / min / max / comment` attributes (Plan 04-02). CONTEXT.md's "no `api/` change" shorthand refers to the public `fetch_all` signature + fetch window, not to internal grade parsing helpers.
    - What we know: CONTEXT.md says "Phase 4 does NOT modify `api/fetcher.py`" but also requires `class_average/class_min/class_max/comment` in D-04.
    - What's unclear: Whether "do not modify `api/fetcher.py`" means the file cannot be touched, or means the fetch window/`fetch_all` signature cannot change.
    - Recommendation: Extend `models.Grade` (add 4 optional fields) and update `_grade_from_raw` (a private helper within `fetcher.py`). The stated constraint refers to the public API contract (`fetch_all` signature, fetch window), not to internal grade parsing.
 
 2. **`Snapshot.overall_average` field: must be added for Grade sensor to avoid blocking**
+   - **RESOLVED:** Add `overall_average: str = ""` (and `period_name: str = ""`) to `models.Snapshot` with backward-compat defaults; `fetch_all` captures `client.current_period.overall_average` in the executor (it's a network-fetching property) and passes it into `Snapshot(overall_average=...)` (Plan 04-02). Required Phase 4 change to `api/models.py` + `api/fetcher.py`.
    - What we know: `Period.overall_average` is a `@property` that makes an HTTP call. It cannot be called from sensor's `native_value`. It must be fetched in the executor and stored in `Snapshot`.
    - What's unclear: Whether this also requires extending `models.Snapshot`.
    - Recommendation: Add `overall_average: str = ""` and `period_name: str = ""` to `models.Snapshot` (frozen dataclass must add these as fields with defaults), update `fetch_all` to populate them alongside grades. This is a **required** Phase 4 change to `api/models.py` and `api/fetcher.py`.
 
 3. **`CalendarEntity.event` implementation — which lesson to return?**
+   - **RESOLVED:** Iterate `coordinator.data.lessons` sorted by `start` ascending; return the first lesson where `lesson.end > dt_util.now()` (covers "currently in a lesson" and "next lesson"); return `None` if no future lesson in the J−7→J+14 window (Plan 04-06).
    - What we know: Must return `CalendarEvent | None` representing "current or next upcoming event".
    - Recommendation: Iterate `coordinator.data.lessons` sorted by `start` ascending; return first lesson where `lesson.end > dt_util.now()`. This covers "currently in a lesson" (start < now < end) and "next lesson" (start > now). Return `None` if no future lesson in the J-7→J+14 window.
 
