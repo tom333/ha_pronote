@@ -437,3 +437,97 @@ def test_fetch_all_set_child_does_not_leak_raw_pronote_api_error():
     # what reaches the caller — set_active_child remaps it to AuthError.
     with pytest.raises((AuthError, RateLimitedError, CommunicationError)):
         fetch_all(mock, today=date(2026, 5, 4), school_tz=NOUMEA, child_index_or_identifier=0)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — _grade_from_raw class context field mapping tests
+# ---------------------------------------------------------------------------
+
+def test_grade_from_raw_captures_class_context():
+    """_grade_from_raw maps raw.average/.max/.min/.comment to Grade class fields.
+
+    pronotepy attribute names differ from model field names (RESEARCH "Name mapping alert"):
+      raw.average → Grade.class_average  (NOT raw.class_average)
+      raw.max     → Grade.class_max
+      raw.min     → Grade.class_min
+      raw.comment → Grade.comment
+    """
+    from custom_components.ha_pronote.api.fetcher import _grade_from_raw
+
+    raw = MagicMock()
+    raw.subject.name = "Mathématiques"
+    raw.grade = "15"
+    raw.out_of = "20"
+    raw.coefficient = "2"
+    raw.date = date(2026, 5, 10)
+    raw.average = "13"    # pronotepy name — maps to Grade.class_average
+    raw.max = "18"        # pronotepy name — maps to Grade.class_max
+    raw.min = "8"         # pronotepy name — maps to Grade.class_min
+    raw.comment = "Bon travail"
+
+    g = _grade_from_raw(raw)
+
+    assert g.class_average == "13"
+    assert g.class_max == "18"
+    assert g.class_min == "8"
+    assert g.comment == "Bon travail"
+
+
+def test_grade_from_raw_missing_class_context_defaults_to_empty():
+    """_grade_from_raw uses getattr fallback when class context fields are absent.
+
+    Uses spec= to restrict attributes — getattr(raw, "average", None) returns None
+    for attributes absent from the spec, which should map to "" in the Grade.
+    """
+    from custom_components.ha_pronote.api.fetcher import _grade_from_raw
+
+    raw = MagicMock(spec=["subject", "grade", "out_of", "coefficient", "date"])
+    raw.subject.name = "EPS"
+    raw.grade = "16"
+    raw.out_of = "20"
+    raw.coefficient = "1"
+    raw.date = date(2026, 5, 11)
+    # average, max, min, comment NOT on spec → getattr returns AttributeError → getattr default None
+
+    g = _grade_from_raw(raw)
+    assert g.class_average == ""
+    assert g.class_min == ""
+    assert g.class_max == ""
+    assert g.comment == ""
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — fetch_all overall_average + period_name capture tests
+# ---------------------------------------------------------------------------
+
+class _FakePeriodWithAverage:
+    """Fake period that exposes overall_average + name (Phase 4 RESEARCH gap #5)."""
+
+    def __init__(self, grades: list, overall_average: str = "14,50", name: str = "Trimestre 2") -> None:
+        self.grades = grades
+        self.overall_average = overall_average
+        self.name = name
+
+
+def test_fetch_all_captures_overall_average_from_current_period():
+    """Snapshot.overall_average is populated from current_period.overall_average (Phase 4)."""
+    client = _FakeClient(grades=[_FakeGrade()])
+    client.current_period = _FakePeriodWithAverage(grades=[_FakeGrade()], overall_average="14,50")
+    snap = fetch_all(client, today=date(2026, 5, 4), school_tz=NOUMEA)
+    assert snap.overall_average == "14,50"
+
+
+def test_fetch_all_captures_period_name_from_current_period():
+    """Snapshot.period_name is populated from current_period.name (Phase 4)."""
+    client = _FakeClient(grades=[_FakeGrade()])
+    client.current_period = _FakePeriodWithAverage(grades=[_FakeGrade()], name="Trimestre 2")
+    snap = fetch_all(client, today=date(2026, 5, 4), school_tz=NOUMEA)
+    assert snap.period_name == "Trimestre 2"
+
+
+def test_fetch_all_overall_average_empty_when_no_current_period():
+    """Snapshot.overall_average defaults to "" when current_period is None."""
+    client = _FakeClient(grades=None)  # current_period will be None
+    snap = fetch_all(client, today=date(2026, 5, 4), school_tz=NOUMEA)
+    assert snap.overall_average == ""
+    assert snap.period_name == ""
