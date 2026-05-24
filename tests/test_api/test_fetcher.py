@@ -232,6 +232,8 @@ def test_fetch_all_returns_snapshot_with_today_field():
 
 def test_fetch_all_calls_set_child_for_parent_client_with_index():
     mock = MagicMock(spec=pronotepy.ParentClient)
+    # 5e1aae3 — int 0 is resolved to mock.children[0] before set_child runs.
+    mock.children = [object(), object()]
     mock.lessons.return_value = []
     mock.current_period = _FakePeriod([])
     mock.information_and_surveys.return_value = []
@@ -241,11 +243,12 @@ def test_fetch_all_calls_set_child_for_parent_client_with_index():
         school_tz=NOUMEA,
         child_index_or_identifier=0,
     )
-    mock.set_child.assert_called_once_with(0)
+    mock.set_child.assert_called_once_with(mock.children[0])
 
 
 def test_fetch_all_calls_set_child_for_parent_client_with_string_identifier():
     mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.children = [object(), object()]  # not exercised but kept for parity
     mock.lessons.return_value = []
     mock.current_period = _FakePeriod([])
     mock.information_and_surveys.return_value = []
@@ -395,6 +398,7 @@ def test_fetch_all_set_child_crypto_error_surfaces_as_auth_error():
     recovery branch would never fire and the failure would leak to HA's
     safety net as a generic UpdateFailed."""
     mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.children = [object()]  # 5e1aae3 — int -> Child resolution needs subscriptable
     mock.set_child.side_effect = pronotepy.exceptions.CryptoError("session expired")
 
     with pytest.raises(AuthError) as excinfo:
@@ -407,6 +411,7 @@ def test_fetch_all_set_child_ip_suspended_surfaces_as_rate_limited():
     must surface as RateLimitedError so Phase 5's circuit-breaker can read
     .reason and back off — defends D-22 / Pitfall 1."""
     mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.children = [object()]
     mock.set_child.side_effect = pronotepy.PronoteAPIError("Your IP address is suspended for 24h")
 
     with pytest.raises(RateLimitedError) as excinfo:
@@ -418,6 +423,7 @@ def test_fetch_all_set_child_other_api_error_surfaces_as_communication_error():
     """CR-06: any other pronotepy.PronoteAPIError during set_child surfaces
     as CommunicationError(PROTOCOL_BROKEN) — same mapping as build_client."""
     mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.children = [object()]
     mock.set_child.side_effect = pronotepy.PronoteAPIError("schema drift")
 
     with pytest.raises(CommunicationError) as excinfo:
@@ -431,6 +437,7 @@ def test_fetch_all_set_child_does_not_leak_raw_pronote_api_error():
     every Pronote interaction (D-09 + WR-05 + Phase 5 backoff all depend on
     this contract)."""
     mock = MagicMock(spec=pronotepy.ParentClient)
+    mock.children = [object()]
     mock.set_child.side_effect = pronotepy.exceptions.CryptoError("session expired")
 
     # The raw pronotepy.PronoteAPIError (parent of CryptoError) must NOT be

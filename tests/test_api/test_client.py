@@ -130,9 +130,13 @@ class _FakeParentClient:
 
     def __init__(self, raise_exc: BaseException | None = None) -> None:
         self._raise = raise_exc
-        self.last_index: int | None = None
+        self.last_index: object | None = None
+        # Phase 3 (5e1aae3) — set_active_child resolves int -> Child via
+        # client.children[idx] before delegating to set_child. Configure a
+        # list of 3 sentinel child objects so int=0/1/2 indices all resolve.
+        self.children = [object(), object(), object()]
 
-    def set_child(self, index: int) -> None:
+    def set_child(self, index: object) -> None:
         self.last_index = index
         if self._raise is not None:
             raise self._raise
@@ -141,7 +145,8 @@ class _FakeParentClient:
 def test_set_active_child_passes_index_through_on_success():
     fake = _FakeParentClient()
     set_active_child(fake, 2)
-    assert fake.last_index == 2
+    # 5e1aae3 — int 2 is resolved to fake.children[2] before set_child runs.
+    assert fake.last_index is fake.children[2]
 
 
 def test_set_active_child_maps_crypto_error_to_auth_error():

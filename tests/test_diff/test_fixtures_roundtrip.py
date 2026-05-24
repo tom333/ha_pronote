@@ -30,6 +30,9 @@ EXPECTED_FIXTURES = {
     "lesson_removed_T1.json",
     "lesson_added_T0.json",
     "lesson_added_T1.json",
+    # Phase 4 D-16 — heavy-class CI gate fixture (TIME-03 / GRADE-03).
+    # Consumer: tests/test_attribute_size.py.
+    "heavy_class.json",
 }
 
 # ISO-8601 datetime with explicit offset, e.g. "2026-05-04T08:00:00+11:00".
@@ -39,8 +42,12 @@ _DATETIME_AWARE_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[
 _DATETIME_NAIVE_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[^+\-Z\d:][^\"]*)?\"")
 
 
-def test_synthetic_directory_holds_exactly_eleven_fixtures():
-    """D-10: 11 hand-crafted synthetic fixtures, no more, no less."""
+def test_synthetic_directory_holds_exactly_expected_fixtures():
+    """D-10 (Phase 2) + D-16 (Phase 4): synthetic fixture set is closed.
+
+    Updated from "eleven" to len(EXPECTED_FIXTURES) so future additions only
+    need to update the set, not the function name.
+    """
     files = {p.name for p in SYNTHETIC_ROOT.glob("*.json")}
     assert files == EXPECTED_FIXTURES, f"unexpected diff: {files ^ EXPECTED_FIXTURES}"
 

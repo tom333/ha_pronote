@@ -59,21 +59,33 @@
       "value": "14,5",
       "out_of": "20",
       "coefficient": "1",
-      "date": "2026-05-01"
+      "date": "2026-05-01",
+      "class_average": "",
+      "class_min": "",
+      "class_max": "",
+      "comment": ""
     },
     {
       "subject": "Histoire",
       "value": "12",
       "out_of": "20",
       "coefficient": "1",
-      "date": "2026-05-02"
+      "date": "2026-05-02",
+      "class_average": "",
+      "class_min": "",
+      "class_max": "",
+      "comment": ""
     },
     {
       "subject": "Anglais",
       "value": "16",
       "out_of": "20",
       "coefficient": "2",
-      "date": "2026-05-03"
+      "date": "2026-05-03",
+      "class_average": "",
+      "class_min": "",
+      "class_max": "",
+      "comment": ""
     }
   ],
   "information": [
@@ -93,5 +105,7 @@
       "excerpt": "Sortie au musee jeudi.",
       "read": true
     }
-  ]
+  ],
+  "overall_average": "",
+  "period_name": ""
 }
