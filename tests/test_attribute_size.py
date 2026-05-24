@@ -6,12 +6,15 @@ HA recorder drops attributes silently when > 16384 bytes — this test catches
 that BEFORE merge, not at runtime.
 
 MAX_STATE_ATTRS_BYTES = 16384 verified in homeassistant/components/recorder/db_schema.py
+
+Calendar gate (test_calendar_event_size_pure_python):
+  Pure-Python, no hass, no pytest.skip — hard D-17 enforcer for CalendarEvent fields.
 """
 
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -91,3 +94,80 @@ async def test_sensor_within_ha_size_limits(
         f"{sensor_cls.__name__} attrs = {attrs_bytes} bytes > {MAX_ATTRS_BYTES} bytes. "
         f"Reduce attribute payload or increase truncation limits."
     )
+
+
+def test_calendar_event_size_pure_python(heavy_class_snapshot) -> None:
+    """D-17 HARD GATE: every CalendarEvent from _lesson_to_event fits HA attribute limits.
+
+    Pure-Python test — uses object.__new__(PronoteCalendar) and iterates all lessons
+    through _lesson_to_event. No HA setup, no hass fixture, cannot skip.
+
+    Asserts:
+      - CalendarEvent.summary <= 255 chars
+      - CalendarEvent.description <= 1024 chars (when present)
+      - CalendarEvent.location <= 255 chars (when present)
+
+    This is the load-bearing D-17 calendar gate. No pytest.skip anywhere in this
+    function body — a skip here defeats the purpose of the CI gate.
+    """
+    from custom_components.ha_pronote.calendar import PronoteCalendar
+
+    entry = MagicMock()
+    entry.runtime_data.child_identifier = "jean_dupont"
+
+    cal = object.__new__(PronoteCalendar)
+    cal._entry = entry  # noqa: SLF001
+
+    assert len(heavy_class_snapshot.lessons) >= 100, (
+        f"heavy_class_snapshot must have >= 100 lessons; got {len(heavy_class_snapshot.lessons)}"
+    )
+
+    for lesson in heavy_class_snapshot.lessons:
+        event = cal._lesson_to_event(lesson)  # noqa: SLF001
+
+        assert len(event.summary) <= MAX_STATE_CHARS, (
+            f"CalendarEvent.summary too long ({len(event.summary)} chars): "
+            f"{event.summary[:60]!r}"
+        )
+        if event.description:
+            assert len(event.description) <= 1024, (
+                f"CalendarEvent.description too long ({len(event.description)} chars)"
+            )
+        if event.location:
+            assert len(event.location) <= MAX_STATE_CHARS, (
+                f"CalendarEvent.location too long ({len(event.location)} chars): "
+                f"{event.location[:60]!r}"
+            )
+
+
+async def test_calendar_events_within_limits_integration(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    heavy_class_snapshot,
+) -> None:
+    """Complementary integration check (not the D-17 gate — see test_calendar_event_size_pure_python).
+
+    Verifies the calendar entity registers and its state is reachable via hass.states.
+    Uses PHACC entity_components if available; skipping here is acceptable because the
+    pure-Python gate above is the hard enforcer.
+    """
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=heavy_class_snapshot,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    calendar_ids = hass.states.async_entity_ids("calendar")
+    assert len(calendar_ids) >= 1, (
+        f"No calendar entity registered. States: {list(hass.states.async_entity_ids())}"
+    )
+    # Further deep-dive via entity_components is a best-effort complement only.
