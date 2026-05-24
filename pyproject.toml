@@ -54,8 +54,6 @@ filterwarnings = [
 source = ["custom_components/ha_pronote"]
 omit = [
     "tests/*",
-    "*/diff/grades.py",         # D-04 / C-02 — Phase 4 fills the body, excluded until then.
-    "*/diff/notifications.py",  # D-04 / C-02 — Phase 4 fills the body, excluded until then.
 ]
 
 [tool.coverage.report]
