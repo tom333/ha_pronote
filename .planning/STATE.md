@@ -4,8 +4,8 @@ milestone: v0.1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-05-24T08:26:57.952Z"
-last_activity: 2026-05-24 -- Phase 4 planning complete
+last_updated: "2026-05-24T08:36:57.969Z"
+last_activity: 2026-05-24 -- Phase 04 execution started
 progress:
   total_phases: 7
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 03 — coordinator-first-sensor
+**Current focus:** Phase 04 — Diff, Events & Full Sensor Suite
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-24 -- Phase 4 planning complete
+Phase: 04 (Diff, Events & Full Sensor Suite) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 04
+Last activity: 2026-05-24 -- Phase 04 execution started
 
 Progress: [          ] 0% of Phase 3
 
