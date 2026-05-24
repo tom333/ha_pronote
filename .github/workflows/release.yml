@@ -15,9 +15,14 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Inject release version into manifest.json
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          # yq is preinstalled on ubuntu-latest runners
-          yq -i -o json '.version="${{ github.event.release.tag_name }}"' \
+          # yq is preinstalled on ubuntu-latest runners.
+          # Strip leading 'v' if present — HA expects PEP 440 / semver without prefix,
+          # but git tag convention often carries 'v' (e.g. v0.1.0-alpha.1 → 0.1.0-alpha.1).
+          VERSION="${RELEASE_TAG#v}"
+          yq -i -o json ".version=\"${VERSION}\"" \
             "${{ github.workspace }}/custom_components/ha_pronote/manifest.json"
 
       - name: Build ha_pronote.zip

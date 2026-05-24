@@ -5,8 +5,9 @@ D-01: single-step ``async_step_user`` form -- URL + account_type + username + pa
       eleve OR parent-with-1-child -> direct entry creation.
       parent-with-multiple-children -> ``async_step_pick_child``.
 D-02: ``async_step_pick_child`` -- single-select dropdown of ``client.children``.
-D-03: URL validation = ``voluptuous.Url()`` only (no HEAD probe; pronotepy connect
-      failure is the reachability signal).
+D-03: URL validation = ``TextSelector(type=URL)`` only (no HEAD probe; pronotepy connect
+      failure is the reachability signal). The HA frontend enforces URL format via the
+      selector; ``voluptuous.Url()`` cannot be JSON-serialised for the config flow UI.
 D-04: error mapping (form-level errors dict -- never raises into the UI):
         AuthError              -> errors={"base": "invalid_auth"}
         RateLimitedError       -> errors={"base": "ip_suspended"}
@@ -52,7 +53,12 @@ from .const import DOMAIN
 
 _USER_SCHEMA = vol.Schema(
     {
-        vol.Required("url"): vol.Url(),  # D-03
+        # D-03: URL validation via TextSelector(URL) — vol.Url() cannot be
+        # JSON-serialised by HA's config flow result preparer (ValueError:
+        # "Unable to convert schema: <function Url>"), so the URL format
+        # check moves to the frontend selector. pronotepy.Client(url, ...)
+        # remains the authoritative reachability + correctness signal.
+        vol.Required("url"): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
         vol.Required("account_type"): vol.In(["eleve", "parent"]),
         vol.Required("username"): str,
         # CR-01: password rendered as masked input in HA frontend.
