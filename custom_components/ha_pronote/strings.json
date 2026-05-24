@@ -43,6 +43,11 @@
       "notifications": {
         "name": "Notifications"
       }
+    },
+    "calendar": {
+      "calendar": {
+        "name": "Emploi du temps"
+      }
     }
   }
 }
