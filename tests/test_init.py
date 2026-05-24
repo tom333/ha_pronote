@@ -66,6 +66,26 @@ async def test_setup_entry_missing_required_key_raises_config_entry_not_ready(ha
     assert result is False
 
 
+def test_phase4_const_values() -> None:
+    """T-04-04b: event-type constants must match REQUIREMENTS exactly (Final + exact string).
+
+    These values are burned into HA automations — a string drift is a breaking change.
+    Phase 4 threat model T-04-04b: values are Final; this test locks them.
+    """
+    from homeassistant.const import Platform
+
+    from custom_components.ha_pronote import const
+
+    assert const.EVENT_SCHEDULE_CHANGED == "pronote_schedule_changed"
+    assert const.EVENT_NEW_GRADE == "pronote_new_grade"
+    assert const.EVENT_NEW_INFORMATION == "pronote_new_information"
+    assert const.CLASS_LEVEL_ATTR == "class_name"
+    assert const.NOTIFICATIONS_WINDOW == 20
+    assert const.GRADE_COMMENT_MAX_LEN == 200
+    assert Platform.CALENDAR in const.PLATFORMS
+    assert Platform.SENSOR in const.PLATFORMS
+
+
 async def test_unload_entry_shuts_down_coordinator(hass, mock_config_entry, mock_pronote_client) -> None:
     """WR-07: async_unload_entry must call coordinator.async_shutdown.
 

@@ -19,4 +19,24 @@ DEFAULT_LOOKAHEAD_DAYS: Final = 14  # J+14
 # Phase 3 additions (D-24, D-25) — HA-side runtime defaults consumed by the
 # coordinator (update_interval) and __init__.py (platform forwarding).
 DEFAULT_REFRESH_INTERVAL: Final = timedelta(minutes=30)  # D-24 — Phase 5 makes adaptive
-PLATFORMS: Final = (Platform.SENSOR,)  # D-25 — Phase 4 adds CALENDAR
+# D-10 — Phase 4 extends to include CALENDAR.
+# __init__.py:async_forward_entry_setups(entry, PLATFORMS) already iterates this const.
+PLATFORMS: Final = (Platform.SENSOR, Platform.CALENDAR)
+
+# Phase 4 additions — event-type constants (D-13, EVENT-01..03),
+# class level attribute (D-19, ENT-01), attribute caps (D-05, D-04),
+# platform extension (D-10).
+
+EVENT_SCHEDULE_CHANGED: Final = "pronote_schedule_changed"   # D-13, EVENT-01
+EVENT_NEW_GRADE: Final = "pronote_new_grade"                 # D-13, EVENT-02
+EVENT_NEW_INFORMATION: Final = "pronote_new_information"     # D-13, EVENT-03
+
+# Probe-locked class level attribute on pronotepy.ClientInfo (D-19, ENT-01).
+# PHASE-4-PROBE-NOTES.md STEP 11 confirms: ClientInfo.class_name returns
+#   raw_resource.get("classeDEleve", {}).get("L", "") — returns "" not None when absent.
+# For ParentClient, client.info.class_name is "" (parent has no class);
+# the child's class lives in client.children[child_index].class_name.
+CLASS_LEVEL_ATTR: Final = "class_name"
+
+NOTIFICATIONS_WINDOW: Final = 20    # D-05 — cap on informations list in sensor attrs
+GRADE_COMMENT_MAX_LEN: Final = 200  # D-04 — comment truncation length at sensor render
