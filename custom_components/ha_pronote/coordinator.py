@@ -43,7 +43,14 @@ from .api import (
     set_active_child,
 )
 from .api.client import build_or_resume_client
-from .const import DEFAULT_REFRESH_INTERVAL, DOMAIN
+from .const import (
+    DEFAULT_REFRESH_INTERVAL,
+    DOMAIN,
+    EVENT_NEW_GRADE,           # Phase 4 D-13
+    EVENT_NEW_INFORMATION,     # Phase 4 D-13
+    EVENT_SCHEDULE_CHANGED,    # Phase 4 D-13
+)
+from .diff import diff_grades, diff_lessons, diff_notifications  # Phase 4 D-14
 
 # WR-04: cooldown applied between consecutive silent-recovery attempts to
 # avoid hammering an IP that is already being suspended by Pronote (Pitfall 2:
@@ -144,6 +151,8 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         # entity to unavailable AND leaving _previous_snapshot stuck on the
         # prior poll — Phase 4's diff layer would later compare an out-of-date
         # baseline and emit phantom "changed lessons" notifications.
+        # D-12: capture previous BEFORE overwriting — _fire_diff_events reads it.
+        previous = self._previous_snapshot  # Phase 4 — read BEFORE overwrite (D-12)
         self._previous_snapshot = snapshot  # C-03
 
         # CR-03 / CR-05: token capture is best-effort. A token-write hiccup
@@ -153,6 +162,12 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             await self._capture_session()  # D-06
         except Exception:  # noqa: BLE001 — defensive: any failure is non-fatal.
             _LOGGER.warning("Failed to persist session token; will retry next poll", exc_info=True)
+
+        # Phase 4: fire typed bus events for each diff since previous snapshot.
+        # D-12: NO try/except — diff bugs surface raw in HA logs (no silent exceptions).
+        # D-15: all diff functions return [] when previous is None (EVENT-04 invariant).
+        # hass.bus.async_fire is @callback — call from event loop only, NEVER from executor.
+        self._fire_diff_events(previous, snapshot)
 
         return snapshot
 
@@ -229,3 +244,40 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             return
         if new_session != entry.data.get("session"):
             self.hass.config_entries.async_update_entry(entry, data={**entry.data, "session": new_session})
+
+    def _fire_diff_events(
+        self,
+        previous: Snapshot | None,
+        new: Snapshot,
+    ) -> None:
+        """Fire typed bus events for each diff since previous snapshot.
+
+        D-12: NO typed try/except — diff bugs surface raw in HA logs (no silent exceptions).
+        D-15: all diff functions return [] when previous is None (EVENT-04 invariant).
+        D-11: every payload is prepended with child_id, child_name, config_entry_id.
+
+        hass.bus.async_fire is @callback — must be called from the event loop. This method
+        is called from _async_update_data which runs on the event loop. Never wrap in
+        async_add_executor_job.
+        """
+        child_context = {
+            "child_id": self._child_identifier,                   # D-11 — frozen slug
+            "child_name": self.config_entry.data["child_name"],   # D-11 — display name
+            "config_entry_id": self.config_entry.entry_id,        # D-11 — multi-child filter key
+        }
+        for change in diff_lessons(previous, new, "today"):
+            self.hass.bus.async_fire(
+                EVENT_SCHEDULE_CHANGED, {**child_context, **change.to_payload()}
+            )
+        for change in diff_lessons(previous, new, "tomorrow"):
+            self.hass.bus.async_fire(
+                EVENT_SCHEDULE_CHANGED, {**child_context, **change.to_payload()}
+            )
+        for grade in diff_grades(previous, new):
+            self.hass.bus.async_fire(
+                EVENT_NEW_GRADE, {**child_context, **grade.to_payload()}
+            )
+        for info in diff_notifications(previous, new):
+            self.hass.bus.async_fire(
+                EVENT_NEW_INFORMATION, {**child_context, **info.to_payload()}
+            )

@@ -583,3 +583,302 @@ async def test_genuine_auth_failure_after_successful_recovery_is_not_swallowed(
         "WR-09: cleared cooldown must allow a fresh recovery attempt — "
         "build_or_resume_client should be called once for the second AuthError"
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 tests — bus event firing (EVENT-01..04, D-11..D-15)
+# ---------------------------------------------------------------------------
+
+
+async def test_no_events_on_first_poll(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """EVENT-04 / D-15: zero bus events on first poll regardless of snapshot content.
+
+    _fire_diff_events(None, snapshot) -> all diff functions return [] when previous is None.
+    """
+    from datetime import date
+
+    today = date(2026, 5, 10)
+    snap1 = snapshot_with_n_lessons_today(today, n=3)
+
+    events_fired: list = []
+    from custom_components.ha_pronote.const import (
+        EVENT_NEW_GRADE,
+        EVENT_NEW_INFORMATION,
+        EVENT_SCHEDULE_CHANGED,
+    )
+
+    hass.bus.async_listen(EVENT_SCHEDULE_CHANGED, lambda e: events_fired.append(("schedule", e)))
+    hass.bus.async_listen(EVENT_NEW_GRADE, lambda e: events_fired.append(("grade", e)))
+    hass.bus.async_listen(EVENT_NEW_INFORMATION, lambda e: events_fired.append(("info", e)))
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snap1,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert events_fired == [], f"Expected no events on first poll, got: {events_fired}"
+
+
+async def test_fires_schedule_changed_on_lesson_diff(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """EVENT-01 / D-11: pronote_schedule_changed fires when a lesson is cancelled on second poll."""
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api.models import Lesson, Snapshot
+    from custom_components.ha_pronote.const import EVENT_SCHEDULE_CHANGED
+
+    today = date(2026, 5, 10)
+    tz = ZoneInfo("Pacific/Noumea")
+
+    # First poll: 1 normal lesson (identity: date=today, 08:00-09:00, subject="S0")
+    snap1 = snapshot_with_n_lessons_today(today, n=1)
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snap1,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    # Listen AFTER first poll so the listener only sees second-poll events
+    events_fired: list = []
+    hass.bus.async_listen(EVENT_SCHEDULE_CHANGED, lambda e: events_fired.append(e))
+
+    # Second poll: same identity (date, 08:00-09:00, "S0") but now cancelled
+    start = datetime(today.year, today.month, today.day, 8, 0, tzinfo=tz)
+    end = datetime(today.year, today.month, today.day, 9, 0, tzinfo=tz)
+    cancelled_lesson = Lesson(
+        date=today,
+        start=start,
+        end=end,
+        subject="S0",
+        teacher="Mme A",
+        classroom="101",
+        canceled=True,
+        status="Cours annulé",
+    )
+    snap2 = Snapshot(today=today, school_tz="Pacific/Noumea", lessons=[cancelled_lesson])
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    with patch("custom_components.ha_pronote.coordinator.fetch_all", return_value=snap2):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    assert len(events_fired) >= 1, f"Expected pronote_schedule_changed event, got: {events_fired}"
+    payload = events_fired[0].data
+    assert payload["child_id"] == "jean_dupont"    # D-11 — slug from entry.data["child_identifier"]
+    assert payload["child_name"] == "Jean Dupont"  # D-11 — display name
+    assert "config_entry_id" in payload            # D-11 — multi-child filter key
+    assert payload["change_type"] == "canceled"    # diff_lessons classification
+    assert payload["day"] == "today"
+
+
+async def test_fires_new_grade_on_grade_diff(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """EVENT-02 / D-11: pronote_new_grade fires when a new grade appears on second poll."""
+    from datetime import date
+
+    from custom_components.ha_pronote.api.models import Grade, Snapshot
+    from custom_components.ha_pronote.const import EVENT_NEW_GRADE
+
+    today = date(2026, 5, 10)
+    snap1 = Snapshot(today=today, school_tz="Pacific/Noumea")  # no grades
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snap1,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    events_fired: list = []
+    hass.bus.async_listen(EVENT_NEW_GRADE, lambda e: events_fired.append(e))
+
+    grade = Grade(subject="Math", value="16", out_of="20", coefficient="1", date=today)
+    snap2 = Snapshot(today=today, school_tz="Pacific/Noumea", grades=[grade])
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    with patch("custom_components.ha_pronote.coordinator.fetch_all", return_value=snap2):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    assert len(events_fired) == 1
+    payload = events_fired[0].data
+    assert payload["child_id"] == "jean_dupont"  # D-11
+    assert payload["subject"] == "Math"
+    assert payload["value"] == "16"
+
+
+async def test_fires_new_information_on_info_diff(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """EVENT-03 / D-11: pronote_new_information fires when new info appears on second poll."""
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api.models import Information, Snapshot
+    from custom_components.ha_pronote.const import EVENT_NEW_INFORMATION
+
+    today = date(2026, 5, 10)
+    tz = ZoneInfo("Pacific/Noumea")
+    snap1 = Snapshot(today=today, school_tz="Pacific/Noumea")  # no informations
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snap1,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    events_fired: list = []
+    hass.bus.async_listen(EVENT_NEW_INFORMATION, lambda e: events_fired.append(e))
+
+    info = Information(
+        info_id="info-001",
+        title="Réunion",
+        sender="Direction",
+        date=datetime(2026, 5, 10, 12, 0, tzinfo=tz),
+        excerpt="Détails de la réunion.",
+        read=False,
+    )
+    snap2 = Snapshot(today=today, school_tz="Pacific/Noumea", information=[info])
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    with patch("custom_components.ha_pronote.coordinator.fetch_all", return_value=snap2):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    assert len(events_fired) == 1
+    payload = events_fired[0].data
+    assert payload["child_id"] == "jean_dupont"  # D-11
+    assert payload["info_id"] == "info-001"
+
+
+async def test_event_payload_contains_child_context(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """D-11: every fired event has child_id (slug), child_name, config_entry_id at the top level."""
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api.models import Grade, Information, Lesson, Snapshot
+    from custom_components.ha_pronote.const import (
+        EVENT_NEW_GRADE,
+        EVENT_NEW_INFORMATION,
+        EVENT_SCHEDULE_CHANGED,
+    )
+
+    today = date(2026, 5, 10)
+    tz = ZoneInfo("Pacific/Noumea")
+    snap1 = Snapshot(today=today, school_tz="Pacific/Noumea")  # empty — no events on first poll
+
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snap1,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    all_events: list = []
+    hass.bus.async_listen(EVENT_SCHEDULE_CHANGED, lambda e: all_events.append(e))
+    hass.bus.async_listen(EVENT_NEW_GRADE, lambda e: all_events.append(e))
+    hass.bus.async_listen(EVENT_NEW_INFORMATION, lambda e: all_events.append(e))
+
+    # Second poll — one of each change type
+    start = datetime(today.year, today.month, today.day, 8, 0, tzinfo=tz)
+    end = datetime(today.year, today.month, today.day, 9, 0, tzinfo=tz)
+    cancelled = Lesson(
+        date=today, start=start, end=end, subject="S0",
+        teacher="Mme A", classroom="101", canceled=True, status="Cours annulé",
+    )
+    grade = Grade(subject="Physique", value="12", out_of="20", coefficient="1", date=today)
+    info = Information(
+        info_id="info-002", title="Test", sender="Prof",
+        date=datetime(2026, 5, 10, 10, 0, tzinfo=tz),
+        excerpt="Résumé.", read=False,
+    )
+    # snap1 had a non-cancelled lesson for "S0" — we need it to exist in snap1 for the diff
+    snap1_with_lesson = Snapshot(
+        today=today,
+        school_tz="Pacific/Noumea",
+        lessons=[
+            Lesson(
+                date=today, start=start, end=end, subject="S0",
+                teacher="Mme A", classroom="101", canceled=False, status="",
+            )
+        ],
+    )
+    snap2 = Snapshot(today=today, school_tz="Pacific/Noumea", lessons=[cancelled], grades=[grade], information=[info])
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    # Manually set the previous snapshot so the diff fires the lesson change
+    coordinator._previous_snapshot = snap1_with_lesson  # noqa: SLF001
+    with patch("custom_components.ha_pronote.coordinator.fetch_all", return_value=snap2):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    assert len(all_events) >= 3, f"Expected at least 3 events (lesson+grade+info), got {len(all_events)}"
+    for evt in all_events:
+        payload = evt.data
+        assert "child_id" in payload, f"Missing child_id in {payload}"
+        assert "child_name" in payload, f"Missing child_name in {payload}"
+        assert "config_entry_id" in payload, f"Missing config_entry_id in {payload}"
+        assert payload["child_id"] == "jean_dupont"   # D-11 slug
+        assert payload["child_name"] == "Jean Dupont"  # D-11 display name
