@@ -198,6 +198,163 @@ def main() -> int:
         traceback.print_exc()
     print()
 
+    # =====================================================================
+    # PHASE 4 PROBES — every pronotepy call the Phase 4 sensors/calendar/
+    # events will need. Run these BEFORE writing Phase 4 code to avoid the
+    # mock-drift cycle that hit Phase 3 alpha.1..alpha.8.
+    # =====================================================================
+
+    from datetime import date, timedelta
+
+    today = date.today()
+    j_minus_7 = today - timedelta(days=7)
+    j_plus_14 = today + timedelta(days=14)
+
+    # The steps 4b/4c/4d above created multiple token_login clients which
+    # invalidate the original client's session ("Page a expiré"). Re-create
+    # a fresh client + re-select the child for Phase 4 fetches. This also
+    # mirrors what the coordinator does at every poll cycle (#D-21).
+    print("=== Phase 4 prep: fresh client + set_child to clear session contamination ===")
+    client = cls(url, username=username, password=password, uuid=str(uuid_lib.uuid4()))
+    if account_type == "parent":
+        client.set_child(client.children[0])
+        print(f"OK — fresh ParentClient, set_child to {client.children[0].name}")
+    else:
+        print("OK — fresh Client")
+    print()
+
+    print("=== STEP 5: client.lessons(today-7, today+14) — EDT sensor + Calendar entity (TIME-02, CAL-01/02) ===")
+    try:
+        lessons = list(client.lessons(date_from=j_minus_7, date_to=j_plus_14))
+        print(f"OK — got {len(lessons)} lessons")
+        if lessons:
+            print("--- first lesson shape ---")
+            print(json.dumps(_summarise(lessons[0]), indent=2, default=str))
+            print()
+            print("--- pronotepy.Lesson attribute distribution (across all returned lessons) ---")
+            sample = lessons[0]
+            for attr in sorted(a for a in dir(sample) if not a.startswith("_")):
+                try:
+                    v = getattr(sample, attr)
+                except Exception as e:  # noqa: BLE001
+                    print(f"  {attr}: <getattr error: {type(e).__name__}>")
+                    continue
+                if callable(v):
+                    continue
+                # Sample 5 lessons to see range of values
+                values = []
+                for ls in lessons[:5]:
+                    try:
+                        values.append(str(getattr(ls, attr))[:40])
+                    except Exception as e:  # noqa: BLE001
+                        values.append(f"<err:{type(e).__name__}>")
+                print(f"  {attr}: {values}")
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        print(f"FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== STEP 6: client.current_period.grades — Grade sensor (GRADE-01..03) ===")
+    try:
+        period = client.current_period
+        print(f"period type: {type(period).__name__}")
+        print(json.dumps(_summarise(period, max_attrs=20), indent=2, default=str))
+        print()
+        try:
+            grades = list(period.grades)
+            print(f"OK — got {len(grades)} grades")
+            if grades:
+                print("--- first grade shape ---")
+                print(json.dumps(_summarise(grades[0]), indent=2, default=str))
+        except (KeyError, AttributeError) as e:
+            # 02-02 spike documented this — pronotepy may raise KeyError 'listeDevoirs'
+            # when current_period is truthy but .grades hits a missing key
+            print(f"period.grades raised {type(e).__name__}: {e}")
+            print("(this matches 02-02 spike finding — handle as 'no grades available')")
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        print(f"FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== STEP 7: client.information_and_surveys() — Notifications sensor (NOTIF-01/02) ===")
+    try:
+        infos = list(client.information_and_surveys())
+        print(f"OK — got {len(infos)} information items")
+        if infos:
+            print("--- first information shape ---")
+            print(json.dumps(_summarise(infos[0]), indent=2, default=str))
+            print()
+            # Sample read/unread distribution
+            unread = sum(1 for i in infos if not getattr(i, "read", True))
+            print(f"--- read/unread distribution: {len(infos) - unread} read / {unread} unread ---")
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        print(f"FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== STEP 8: client.menus(today, today+7) — optional Cantine sensor (out of scope v1) ===")
+    try:
+        menus = list(client.menus(date_from=today, date_to=today + timedelta(days=7)))
+        print(f"OK — got {len(menus)} menu entries")
+        if menus:
+            print("--- first menu shape ---")
+            print(json.dumps(_summarise(menus[0]), indent=2, default=str))
+    except Exception as e:  # noqa: BLE001
+        print(f"INFO: menus probe raised {type(e).__name__}: {e} (out of scope v1)")
+    print()
+
+    print("=== STEP 9: client.periods — period list for grades sensor multi-period ===")
+    try:
+        periods = client.periods
+        print(f"OK — got {len(periods)} periods")
+        print(f"--- period names: {[getattr(p, 'name', '?') for p in periods]} ---")
+        if periods:
+            print("--- first period shape ---")
+            print(json.dumps(_summarise(periods[0], max_attrs=15), indent=2, default=str))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        print(f"FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== STEP 10: cancellation/modification signal — Lesson.canceled / .status / .detention ===")
+    # Phase 4 GOAL hinges on detecting "cours annulé" vs "modifié" reliably.
+    # Plan 02-02 spike captured fixture pairs but documented byte-identical
+    # T0/T1 cases (see tests/test_diff/test_lessons.py SKIPPED entries).
+    # Live probe across ~21 days of lessons to see real signal distribution.
+    try:
+        lessons = list(client.lessons(date_from=j_minus_7, date_to=j_plus_14))
+        if lessons:
+            sample = lessons[0]
+            candidate_signals = [a for a in dir(sample) if a in {
+                "canceled", "cancelled", "status", "outing", "exempted",
+                "test", "detention", "memo", "background_color",
+            }]
+            print(f"candidate signal attrs on Lesson: {candidate_signals}")
+            print()
+            # Distribution
+            for attr in candidate_signals:
+                vals = [str(getattr(ls, attr, None))[:30] for ls in lessons]
+                from collections import Counter
+                dist = Counter(vals).most_common(5)
+                print(f"  {attr}: top values {dist}")
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        print(f"FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
+    print()
+
+    print("=== STEP 11: client.info — needed for AUTH-07 DeviceInfo refinement (Phase 4 device.model) ===")
+    try:
+        info = client.info
+        print(json.dumps(_summarise(info), indent=2, default=str))
+    except Exception as e:  # noqa: BLE001
+        print(f"FAILED: {type(e).__name__}: {e}")
+    print()
+
     return 0
 
 
