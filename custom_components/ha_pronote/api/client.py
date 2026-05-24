@@ -140,12 +140,18 @@ def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 
         raise CommunicationError(redact(str(err))) from err  # WR-05
 
 
-def set_active_child(client: pronotepy.ParentClient, child_index: int | str) -> None:
+def set_active_child(client: pronotepy.ParentClient, child_ref: object) -> None:
     """Apply a parent's child selection with our typed-error mapping (CR-04).
 
-    Wraps ``client.set_child(child_index)`` so callers don't have to know
-    about the underlying pronotepy exception classes. Mirrors the error
-    mapping used by ``build_client`` / ``build_or_resume_client``:
+    pronotepy.ParentClient.set_child accepts a child **name** (str) OR a
+    ``Child`` object — but NOT an integer index. The Phase 3 plan stored
+    ``child_index: int`` in entry.data; this wrapper resolves an int into
+    ``client.children[index]`` before delegating. Any other type is passed
+    through unchanged (pronotepy will validate).
+
+    Wraps ``client.set_child(...)`` so callers don't have to know about
+    pronotepy exception classes. Mirrors the error mapping used by
+    ``build_client`` / ``build_or_resume_client``:
 
     - ``pronotepy.exceptions.CryptoError`` -> ``AuthError`` (session expired
       between login and child selection — D-09's silent-recovery loop will
@@ -156,22 +162,29 @@ def set_active_child(client: pronotepy.ParentClient, child_index: int | str) -> 
       (with ``ErrorReason.PROTOCOL_BROKEN``).
     - ``OSError`` -> ``CommunicationError`` (transient network).
 
-    All raw exception messages are passed through ``redact()`` (WR-05).
+    All re-raises use ``from err`` so the full pronotepy traceback is
+    preserved in HA logs. Raw exception messages are passed through
+    ``redact()`` (WR-05).
 
     Args:
         client: Live ``pronotepy.ParentClient`` (the only client class with
             ``set_child``).
-        child_index: 0-based index into ``client.children`` OR a string
-            identifier accepted by pronotepy's ``set_child`` overload
-            (D-21 — fetcher.fetch_all may pass either form).
+        child_ref: ``int`` (0-based index into ``client.children``), ``str``
+            (child name), or a ``pronotepy.Child`` object.
 
     Raises:
         AuthError: see above.
         RateLimitedError: see above.
         CommunicationError: see above.
     """
+    if isinstance(child_ref, int):
+        # pronotepy expects a Child object or name string, not an index.
+        # Let an IndexError propagate raw if the index is out of range —
+        # that's a caller bug (entry.data has stale child_index), not a
+        # pronotepy condition we need to wrap.
+        child_ref = client.children[child_ref]
     try:
-        client.set_child(child_index)
+        client.set_child(child_ref)
     except pronotepy.exceptions.CryptoError as err:
         raise AuthError(redact(str(err))) from err
     except pronotepy.PronoteAPIError as err:
