@@ -30,6 +30,7 @@ Banned in this file (CLAUDE.md "What NOT to Use" + Phase 1 D-30..D-35):
 
 from __future__ import annotations
 
+import logging
 from functools import partial
 from typing import Any
 from urllib.parse import urlparse
@@ -50,6 +51,8 @@ from .api import (
     set_active_child,
 )
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 _USER_SCHEMA = vol.Schema(
     {
@@ -92,12 +95,16 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 )
             except AuthError:
+                _LOGGER.warning("Config flow: AuthError from pronotepy", exc_info=True)
                 errors["base"] = "invalid_auth"
             except RateLimitedError:
+                _LOGGER.warning("Config flow: RateLimitedError from pronotepy", exc_info=True)
                 errors["base"] = "ip_suspended"
             except CommunicationError:
+                _LOGGER.warning("Config flow: CommunicationError from pronotepy", exc_info=True)
                 errors["base"] = "cannot_connect"
             except PronoteIntegrationError:
+                _LOGGER.warning("Config flow: PronoteIntegrationError from pronotepy", exc_info=True)
                 errors["base"] = "unknown"
             else:
                 self._client = client
