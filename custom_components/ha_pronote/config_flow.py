@@ -155,12 +155,16 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 child_name = self._client.info.name
                 child_pronote_identifier = ""  # eleve: no separate identifier
         except AuthError:
+            _LOGGER.warning("_create_entry: AuthError from set_active_child", exc_info=True)
             return self.async_abort(reason="invalid_auth")
         except RateLimitedError:
+            _LOGGER.warning("_create_entry: RateLimitedError from set_active_child", exc_info=True)
             return self.async_abort(reason="ip_suspended")
         except CommunicationError:
+            _LOGGER.warning("_create_entry: CommunicationError from set_active_child", exc_info=True)
             return self.async_abort(reason="cannot_connect")
         except PronoteIntegrationError:
+            _LOGGER.warning("_create_entry: PronoteIntegrationError from set_active_child", exc_info=True)
             return self.async_abort(reason="cannot_connect")
 
         base_slug = slugify(
@@ -193,6 +197,7 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
         try:
             session = await self.hass.async_add_executor_job(self._client.export_credentials)
         except Exception:  # noqa: BLE001 — pronotepy may surface untyped errors here.
+            _LOGGER.warning("_create_entry: export_credentials() failed", exc_info=True)
             return self.async_abort(reason="cannot_connect")
 
         return self.async_create_entry(
