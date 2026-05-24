@@ -5,6 +5,7 @@ Caller (Phase 3 coordinator) wraps each call in ``hass.async_add_executor_job(pa
 
 from __future__ import annotations
 
+import uuid as uuid_lib
 from typing import Any, Literal
 
 import pronotepy
@@ -23,6 +24,15 @@ def build_client(
     password: str,
 ) -> pronotepy.Client | pronotepy.ParentClient:
     """Construct a pronotepy client (D-21).
+
+    A fresh UUID v4 is generated at every call. The UUID is required by
+    pronotepy's `token_login` resume path — calling `Client(...)` without
+    `uuid=` leaves the field empty, `export_credentials()` then returns
+    `uuid: ""`, and the next `token_login(**session)` raises
+    `PronoteAPIError("UUID must not be empty")`. The UUID survives in the
+    `session` dict returned by `export_credentials()` so every subsequent
+    `build_or_resume_client(..., session=...)` resume reuses the same value
+    (Pronote treats it as the same device).
 
     Args:
         url: Full Pronote space URL (e.g. ``https://example.com/pronote/eleve.html``).
@@ -43,7 +53,7 @@ def build_client(
     cls: type[pronotepy.Client | pronotepy.ParentClient]
     cls = pronotepy.ParentClient if account_type == "parent" else pronotepy.Client
     try:
-        return cls(url, username=username, password=password)
+        return cls(url, username=username, password=password, uuid=str(uuid_lib.uuid4()))
     except pronotepy.exceptions.CryptoError as err:
         raise AuthError(redact(str(err))) from err  # WR-05
     except pronotepy.PronoteAPIError as err:
@@ -95,14 +105,17 @@ def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 
     cls = pronotepy.ParentClient if account_type == "parent" else pronotepy.Client
 
     # D-07 fast path: token_login if we have stored session.
+    # pronotepy `ClientBase.token_login(pronote_url, username, password, uuid,
+    # account_pin=None, client_identifier=None, device_name=None)` — the
+    # `session` dict returned by `client.export_credentials()` already
+    # contains pronote_url + username + password + uuid + client_identifier
+    # under exactly those keys (verified live via scripts/probe_config_flow.py).
+    # Passing `url` positional and `username=username` explicit triggers
+    # "got multiple values for argument" TypeError. Let session win; only
+    # device_name is ours to add.
     if session is not None:
         try:
-            return cls.token_login(
-                url,
-                username=username,
-                device_name=device_name,
-                **session,
-            )
+            return cls.token_login(device_name=device_name, **session)
         except pronotepy.exceptions.CryptoError:
             pass  # stale session — fall through to fresh login.
         except pronotepy.PronoteAPIError as err:
@@ -118,12 +131,13 @@ def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 
         except OSError:
             pass  # transient network — fresh login may still succeed.
 
-    # Fresh login — same error mapping as ``build_client``, with device_name kwarg.
+    # Fresh login — same error mapping as ``build_client``, with device_name + uuid.
     try:
         return cls(
             url,
             username=username,
             password=password,
+            uuid=str(uuid_lib.uuid4()),
             device_name=device_name,
         )
     except pronotepy.exceptions.CryptoError as err:
