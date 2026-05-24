@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
+from pathlib import Path
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
@@ -134,3 +136,43 @@ def snapshot_with_n_lessons_today(make_lesson):
         )
 
     return _build
+
+
+# Phase 4 additions — heavy-class snapshot + grades-capable mock client.
+
+
+@pytest.fixture
+def heavy_class_snapshot() -> Snapshot:
+    """Load tests/fixtures/synthetic/heavy_class.json as a Snapshot.
+
+    Used by tests/test_attribute_size.py CI gate (D-17). JSON committed
+    alongside _gen_heavy_class.py (D-16). Verifies: >= 126 lessons, 100 grades,
+    30 infos with overall_average "14,50" and period_name "Trimestre 2".
+    """
+    path = Path(__file__).parent / "fixtures" / "synthetic" / "heavy_class.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return Snapshot.from_dict(raw)
+
+
+@pytest.fixture
+def mock_pronote_client_with_grades(mock_pronote_client):
+    """Extends mock_pronote_client with current_period.overall_average + grades list.
+
+    Shape matches probe-captured pronotepy 2.14.6 surface (PHASE-4-PROBE-NOTES.md STEP 6).
+    C-06: MagicMock at the build_or_resume_client seam — NOT requests-mock.
+    """
+    mock_pronote_client.current_period.overall_average = "14,50"
+    mock_pronote_client.current_period.name = "Trimestre 2"
+    mock_grade = MagicMock()
+    mock_grade.subject = MagicMock()
+    mock_grade.subject.name = "Mathématiques"
+    mock_grade.grade = "15"
+    mock_grade.out_of = "20"
+    mock_grade.coefficient = "2"
+    mock_grade.date = date(2026, 5, 10)
+    mock_grade.average = "13"   # pronotepy attr name -> maps to Grade.class_average
+    mock_grade.min = "8"        # pronotepy attr name -> maps to Grade.class_min
+    mock_grade.max = "18"       # pronotepy attr name -> maps to Grade.class_max
+    mock_grade.comment = ""
+    mock_pronote_client.current_period.grades = [mock_grade]
+    return mock_pronote_client

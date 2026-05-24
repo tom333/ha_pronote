@@ -36,6 +36,12 @@
     "sensor": {
       "lessons_today": {
         "name": "Lessons today"
+      },
+      "grades": {
+        "name": "Notes"
+      },
+      "notifications": {
+        "name": "Notifications"
       }
     }
   }
