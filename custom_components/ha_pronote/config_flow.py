@@ -30,7 +30,6 @@ Banned in this file (CLAUDE.md "What NOT to Use" + Phase 1 D-30..D-35):
 
 from __future__ import annotations
 
-import logging
 from functools import partial
 from typing import Any
 from urllib.parse import urlparse
@@ -42,17 +41,8 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
-from .api import (
-    AuthError,
-    CommunicationError,
-    PronoteIntegrationError,
-    RateLimitedError,
-    build_client,
-    set_active_child,
-)
+from .api import build_client, set_active_child
 from .const import DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
 
 _USER_SCHEMA = vol.Schema(
     {
@@ -81,40 +71,33 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
         self._user_input: dict[str, Any] | None = None
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Single-step credential form per D-01."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            try:
-                client = await self.hass.async_add_executor_job(
-                    partial(
-                        build_client,
-                        user_input["url"],
-                        user_input["account_type"],
-                        user_input["username"],
-                        user_input["password"],
-                    )
-                )
-            except AuthError:
-                _LOGGER.warning("Config flow: AuthError from pronotepy", exc_info=True)
-                errors["base"] = "invalid_auth"
-            except RateLimitedError:
-                _LOGGER.warning("Config flow: RateLimitedError from pronotepy", exc_info=True)
-                errors["base"] = "ip_suspended"
-            except CommunicationError:
-                _LOGGER.warning("Config flow: CommunicationError from pronotepy", exc_info=True)
-                errors["base"] = "cannot_connect"
-            except PronoteIntegrationError:
-                _LOGGER.warning("Config flow: PronoteIntegrationError from pronotepy", exc_info=True)
-                errors["base"] = "unknown"
-            else:
-                self._client = client
-                self._user_input = user_input
-                # D-01: parent with >1 children -> pick_child; otherwise create.
-                if isinstance(client, pronotepy.ParentClient) and len(client.children) > 1:
-                    return await self.async_step_pick_child()
-                return await self._create_entry(child_index=None)
+        """Single-step credential form per D-01.
 
-        return self.async_show_form(step_id="user", data_schema=_USER_SCHEMA, errors=errors)
+        DEBUG MODE: typed exception mapping (D-04: AuthError → invalid_auth, etc.)
+        is intentionally REMOVED so all exceptions propagate raw to HA's
+        framework. This surfaces the full traceback in `ha core logs` and a
+        500 in the UI instead of polite form-error labels. Re-introduce the
+        mapping once the underlying pronotepy 2.14.6 vs Pronote 2025.2.9
+        integration is stabilised.
+        """
+        if user_input is not None:
+            client = await self.hass.async_add_executor_job(
+                partial(
+                    build_client,
+                    user_input["url"],
+                    user_input["account_type"],
+                    user_input["username"],
+                    user_input["password"],
+                )
+            )
+            self._client = client
+            self._user_input = user_input
+            # D-01: parent with >1 children -> pick_child; otherwise create.
+            if isinstance(client, pronotepy.ParentClient) and len(client.children) > 1:
+                return await self.async_step_pick_child()
+            return await self._create_entry(child_index=None)
+
+        return self.async_show_form(step_id="user", data_schema=_USER_SCHEMA)
 
     async def async_step_pick_child(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """D-02: single-select dropdown of ParentClient.children."""
@@ -132,40 +115,26 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="pick_child", data_schema=schema)
 
-    async def _create_entry(self, child_index: int | None) -> ConfigFlowResult:  # noqa: PLR0911 — WR-06 needs one return per typed-error class
-        """Resolve child, derive identifier, set unique_id, create entry."""
+    async def _create_entry(self, child_index: int | None) -> ConfigFlowResult:
+        """Resolve child, derive identifier, set unique_id, create entry.
+
+        DEBUG MODE: every WR-06 typed catch removed — set_active_child,
+        export_credentials, and child access all propagate raw exceptions.
+        """
         if self._client is None or self._user_input is None:
             return self.async_abort(reason="unknown")
 
-        # Resolve the child name + index for downstream storage (D-08).
-        # WR-06: both set_active_child and export_credentials can raise our
-        # typed exceptions (CR-04 helper plus pronotepy state surprises). They
-        # used to escape the flow as 'Unknown error' aborts; now we route them
-        # via the same D-04 mapping the user step uses.
-        try:
-            if isinstance(self._client, pronotepy.ParentClient):
-                if child_index is None:
-                    # parent with exactly one child -- implicit pick.
-                    child_index = 0
-                await self.hass.async_add_executor_job(set_active_child, self._client, child_index)
-                child = self._client.children[child_index]
-                child_name = child.name
-                child_pronote_identifier = child.identifier
-            else:
-                child_name = self._client.info.name
-                child_pronote_identifier = ""  # eleve: no separate identifier
-        except AuthError:
-            _LOGGER.warning("_create_entry: AuthError from set_active_child", exc_info=True)
-            return self.async_abort(reason="invalid_auth")
-        except RateLimitedError:
-            _LOGGER.warning("_create_entry: RateLimitedError from set_active_child", exc_info=True)
-            return self.async_abort(reason="ip_suspended")
-        except CommunicationError:
-            _LOGGER.warning("_create_entry: CommunicationError from set_active_child", exc_info=True)
-            return self.async_abort(reason="cannot_connect")
-        except PronoteIntegrationError:
-            _LOGGER.warning("_create_entry: PronoteIntegrationError from set_active_child", exc_info=True)
-            return self.async_abort(reason="cannot_connect")
+        if isinstance(self._client, pronotepy.ParentClient):
+            if child_index is None:
+                # parent with exactly one child -- implicit pick.
+                child_index = 0
+            await self.hass.async_add_executor_job(set_active_child, self._client, child_index)
+            child = self._client.children[child_index]
+            child_name = child.name
+            child_pronote_identifier = child.identifier
+        else:
+            child_name = self._client.info.name
+            child_pronote_identifier = ""  # eleve: no separate identifier
 
         base_slug = slugify(
             child_name, separator="_"
@@ -192,13 +161,7 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
         # D-06: capture export_credentials() at flow time so the first
         # async_setup_entry has a session to try. Plan 02's coordinator
         # writes a fresh session after every successful poll.
-        # WR-06: export_credentials can raise on a half-initialized client;
-        # surface as cannot_connect rather than an opaque 'Unknown error'.
-        try:
-            session = await self.hass.async_add_executor_job(self._client.export_credentials)
-        except Exception:  # noqa: BLE001 — pronotepy may surface untyped errors here.
-            _LOGGER.warning("_create_entry: export_credentials() failed", exc_info=True)
-            return self.async_abort(reason="cannot_connect")
+        session = await self.hass.async_add_executor_job(self._client.export_credentials)
 
         return self.async_create_entry(
             title=f"{child_name} ({self._user_input['account_type']})",
