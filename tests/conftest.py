@@ -37,6 +37,7 @@ def mock_pronote_client():
     """
     client = MagicMock()
     client.info.name = "Jean Dupont"
+    client.info.class_name = "3ème A"  # Phase 4 — CLASS_LEVEL_ATTR probe-confirmed
     client.children = []  # eleve = no parent-side children attribute used
     client.current_period = MagicMock()
     client.current_period.grades = []

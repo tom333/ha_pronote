@@ -82,8 +82,10 @@ def test_sensor_class_attributes_lock_d15_d16() -> None:
     assert PronoteLessonsTodaySensor._attr_state_class == SensorStateClass.MEASUREMENT  # noqa: SLF001
     assert PronoteLessonsTodaySensor._attr_native_unit_of_measurement == "lessons"  # noqa: SLF001
     assert PronoteLessonsTodaySensor._attr_has_entity_name is True  # noqa: SLF001
-    # D-14 — Phase 3 ships state-only; no class-level extra-state-attribute payload.
-    assert not hasattr(PronoteLessonsTodaySensor, "_attr_extra_state_attributes")
+    # Phase 4 adds TIME-02 extra_state_attributes (lessons_today + lessons_tomorrow).
+    # The Phase 3 assertion "no _attr_extra_state_attributes" is now REMOVED.
+    # The property is defined on the instance (not as a class-level _attr), so
+    # hasattr check is no longer meaningful here.
 
 
 async def test_sensor_state_class_attribute_in_state(
@@ -141,6 +143,139 @@ async def test_sensor_no_lessons_attribute_in_state(
     assert "lessons" not in state.attributes
     assert "lessons_today" not in state.attributes
     assert "lessons_tomorrow" not in state.attributes
+
+
+async def test_device_info_model_set_from_class_name(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """ENT-01 / D-19: DeviceInfo.model = ClientInfo.class_name when non-empty (eleve path)."""
+    from homeassistant.helpers import device_registry as dr
+
+    today = date(2026, 5, 7)
+    mock_pronote_client.info.class_name = "3ème A"
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    device_registry = dr.async_get(hass)
+    devices = list(device_registry.devices.values())
+    assert len(devices) == 1
+    device = devices[0]
+    assert device.manufacturer == "Pronote"
+    assert device.model == "3ème A"
+
+
+async def test_device_info_model_none_when_class_name_empty(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """ENT-01 / D-19: DeviceInfo.model is None when class_name == '' (HA hides the row)."""
+    from homeassistant.helpers import device_registry as dr
+
+    today = date(2026, 5, 7)
+    mock_pronote_client.info.class_name = ""  # empty string -> or None
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    device_registry = dr.async_get(hass)
+    devices = list(device_registry.devices.values())
+    assert len(devices) == 1
+    assert devices[0].model is None
+
+
+async def test_device_info_model_for_parent_client(
+    hass,
+    mock_config_entry,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """ENT-01 / D-19 (ParentClient path): DeviceInfo.model sources from children[child_index].
+
+    PHASE-4-PROBE-NOTES.md STEP 11: client.info.class_name == "" for parent;
+    child's class lives in client.children[child_index].class_name.
+    """
+    import pronotepy
+    from homeassistant.helpers import device_registry as dr
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.ha_pronote.const import DOMAIN
+
+    from unittest.mock import MagicMock
+
+    today = date(2026, 5, 7)
+
+    # Simulate a ParentClient mock
+    parent_client = MagicMock(spec=pronotepy.ParentClient)
+    parent_client.info.name = "M. GUYADER Thomas"
+    parent_client.info.class_name = ""  # parent has no class (probe-confirmed)
+    child_mock = MagicMock()
+    child_mock.class_name = "504"
+    parent_client.children = [child_mock]
+    parent_client.current_period = MagicMock()
+    parent_client.current_period.grades = []
+    parent_client.lessons = MagicMock(return_value=[])
+    parent_client.information_and_surveys = MagicMock(return_value=[])
+    parent_client.export_credentials = MagicMock(return_value={"token": "parent_tok"})
+    parent_client.set_child = MagicMock()
+
+    parent_entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:parent:guyader_sacha",
+        data={
+            "url": "https://example.com/pronote/parent.html",
+            "account_type": "parent",
+            "username": "parent_user",
+            "password": "pass",
+            "session": {"token": "parent_tok"},
+            "child_identifier": "guyader_sacha",
+            "child_index": 0,
+            "child_name": "GUYADER Sacha",
+        },
+        version=1,
+    )
+    parent_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=parent_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        await hass.config_entries.async_setup(parent_entry.entry_id)
+        await hass.async_block_till_done()
+
+    device_registry = dr.async_get(hass)
+    devices = list(device_registry.devices.values())
+    assert len(devices) == 1
+    assert devices[0].model == "504"
 
 
 async def test_sensor_unavailable_when_coordinator_fails(
