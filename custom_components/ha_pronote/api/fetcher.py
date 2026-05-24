@@ -77,8 +77,19 @@ def fetch_all(
 
     try:
         raw_lessons = list(client.lessons(date_from=start, date_to=end))
+        overall_avg = ""
+        period_name = ""
         try:
-            raw_grades = list(client.current_period.grades) if client.current_period else []
+            if client.current_period:
+                raw_grades = list(client.current_period.grades)
+                # Phase 4: capture overall_average + period_name in the same executor call.
+                # Period.overall_average is a @property making a fresh Pronote HTTP call —
+                # MUST stay in executor (RESEARCH Pitfall 3: never call from sensor native_value).
+                # getattr fallback: no silent exception — missing attribute produces "" visibly.
+                overall_avg = str(getattr(client.current_period, "overall_average", "") or "")
+                period_name = str(getattr(client.current_period, "name", "") or "")
+            else:
+                raw_grades = []
         except (KeyError, AttributeError):
             # Pronote may not expose grades on this account/period (parent
             # accounts before grades publication, schema gaps in pronotepy
@@ -87,6 +98,8 @@ def fetch_all(
             # missing key). Lessons + information are the Core Value path —
             # do not fail the snapshot when only grades are unavailable.
             raw_grades = []
+            overall_avg = ""
+            period_name = ""
         raw_info = list(client.information_and_surveys())
     except pronotepy.PronoteAPIError as err:
         raise CommunicationError(
@@ -106,6 +119,8 @@ def fetch_all(
         lessons=[_lesson_from_raw(item, school_tz) for item in raw_lessons],
         grades=[_grade_from_raw(item) for item in raw_grades],
         information=[_info_from_raw(item, school_tz) for item in raw_info],
+        overall_average=overall_avg,   # Phase 4 — fetched in executor alongside grades
+        period_name=period_name,       # Phase 4
     )
 
 
@@ -141,13 +156,28 @@ def _lesson_from_raw(raw: Any, school_tz: ZoneInfo) -> Lesson:
 
 
 def _grade_from_raw(raw: Any) -> Grade:
-    """Field-by-field copy of a pronotepy grade."""
+    """Field-by-field copy of a pronotepy grade.
+
+    pronotepy attribute name → Grade model field mapping (RESEARCH "Name mapping alert"):
+      raw.average → Grade.class_average  (pronotepy uses "average", NOT "class_average")
+      raw.max     → Grade.class_max
+      raw.min     → Grade.class_min
+      raw.comment → Grade.comment
+
+    getattr(..., None) fallback: missing fields produce "" (explicit visible default,
+    not a swallowing catch — per project feedback: no silent exceptions).
+    str(...) cast normalizes int/float pronotepy returns to string; None → "" via ``or ""``.
+    """
     return Grade(
         subject=raw.subject.name if raw.subject else "",
         value=str(raw.grade) if raw.grade is not None else "",
         out_of=str(raw.out_of) if raw.out_of is not None else "",
         coefficient=str(raw.coefficient) if raw.coefficient is not None else "",
         date=raw.date,
+        class_average=str(getattr(raw, "average", None) or ""),   # Phase 4 — pronotepy attr "average"
+        class_min=str(getattr(raw, "min", None) or ""),           # Phase 4 — pronotepy attr "min"
+        class_max=str(getattr(raw, "max", None) or ""),           # Phase 4 — pronotepy attr "max"
+        comment=str(getattr(raw, "comment", None) or ""),         # Phase 4 — empty/None → ""
     )
 
 
