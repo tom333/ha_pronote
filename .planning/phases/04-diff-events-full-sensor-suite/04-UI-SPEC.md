@@ -1,7 +1,8 @@
 ---
 phase: 4
 slug: diff-events-full-sensor-suite
-status: draft
+status: approved
+reviewed_at: 2026-05-24T00:00:00Z
 shadcn_initialized: false
 preset: none
 created: 2026-05-24
