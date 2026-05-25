@@ -28,8 +28,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GUARDED_PATHS = [
     REPO_ROOT / "custom_components" / "ha_pronote" / "api",
     REPO_ROOT / "custom_components" / "ha_pronote" / "diff",
+    REPO_ROOT / "custom_components" / "ha_pronote" / "politesse.py",  # Phase 5 — D-16
+    REPO_ROOT
+    / "custom_components"
+    / "ha_pronote"
+    / "holiday_dates.py",  # Phase 5 — WR-2 neutral helper (shipped by Plan 05-02)
     REPO_ROOT / "tests" / "test_api",
     REPO_ROOT / "tests" / "test_diff",
+    REPO_ROOT / "tests" / "test_politesse_tz_matrix.py",  # Phase 5 — D-20
 ]
 
 
@@ -46,7 +52,9 @@ def auto_enable_custom_integrations():
 
 
 def _python_files(root: Path) -> list[Path]:
-    """Return every ``.py`` file under ``root``, recursively. Empty list if missing."""
+    """Return every ``.py`` file under ``root`` (or ``[root]`` if it's a file)."""
+    if root.is_file() and root.suffix == ".py":
+        return [root]
     return list(root.rglob("*.py")) if root.is_dir() else []
 
 
