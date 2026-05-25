@@ -846,3 +846,69 @@ async def test_notifications_title_none_serialised_as_empty_string(
     assert state is not None
     title = state.attributes["informations"][0]["title"]
     assert title == "", f"Expected '' for None title, got {title!r}"
+
+
+# Phase 6 — OPT-03 / D-13 / D-14 / D-16: nickname affects DeviceInfo.name only;
+# unique_id and entity_id stay frozen (ENT-02). The strip + empty-as-None
+# semantics are tested across the truthy / empty / whitespace / None cases.
+
+@pytest.mark.parametrize(
+    ("nickname_value", "expected_device_name"),
+    [
+        (None, "Jean Dupont"),                # missing → fallback to child_name
+        ("", "Jean Dupont"),                  # empty → fallback
+        ("   ", "Jean Dupont"),               # whitespace-only → fallback
+        ("Jeannot", "Jeannot"),               # truthy → nickname wins
+        ("   Jeannot   ", "Jeannot"),         # strip applied → nickname wins
+    ],
+    ids=["none", "empty", "whitespace", "truthy", "stripped"],
+)
+async def test_device_info_nickname_fallback(
+    hass, mock_pronote_client, snapshot_with_n_lessons_today,
+    nickname_value, expected_device_name,
+) -> None:
+    """OPT-03 / D-13 / D-14: DeviceInfo.name = nickname (stripped) OR entry.data['child_name']."""
+    from datetime import date
+
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.ha_pronote.const import DOMAIN
+
+    options = {} if nickname_value is None else {"nickname": nickname_value}
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data={
+            "url": "https://example.com/pronote/eleve.html",
+            "account_type": "eleve",
+            "username": "alice",
+            "password": "p",
+            "session": None,
+            "child_identifier": "jean_dupont",
+            "child_index": None,
+            "child_name": "Jean Dupont",
+        },
+        options=options,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    today = date(2026, 5, 7)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    # Read the device from the device registry. The integration creates ONE
+    # device per child via DeviceInfo(identifiers={(DOMAIN, child_identifier)}).
+    from homeassistant.helpers import device_registry as dr
+    registry = dr.async_get(hass)
+    device = registry.async_get_device(identifiers={(DOMAIN, "jean_dupont")})
+    assert device is not None
+    assert device.name == expected_device_name

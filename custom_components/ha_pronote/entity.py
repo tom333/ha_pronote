@@ -82,9 +82,19 @@ class PronoteEntity(CoordinatorEntity["PronoteDataUpdateCoordinator"]):
         else:
             info_obj = client.info
         class_label = getattr(info_obj, CLASS_LEVEL_ATTR, None) or None  # "" -> None
+        # Phase 6 D-13 / D-14 / D-16 — nickname affects DeviceInfo.name only;
+        # unique_id and entity_id stay frozen (ENT-02). The OptionsFlow schema
+        # (Plan 06-05) strips on write, but a Phase 5-era entry may have a stale
+        # unstripped value in entry.options; the .strip() here is belt-and-braces.
+        # Empty-post-strip → None → fall through to entry.data["child_name"]
+        # (Phase 3 D-08).
+        display_name = (
+            (self._entry.options.get("nickname") or "").strip()
+            or self._entry.data["child_name"]
+        )
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry.runtime_data.child_identifier)},
-            name=self._entry.data["child_name"],
+            name=display_name,
             manufacturer="Pronote",
             model=class_label,  # D-19: None hides the row in HA device panel
         )
