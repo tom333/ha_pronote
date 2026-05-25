@@ -975,7 +975,17 @@ async def test_3_consecutive_auth_failures_set_backoff_4h_and_notification(
         JITTER_SECONDS,
     )
 
-    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))  # Tue afternoon
+    # Plan 05-04 Task 2 — Hypothesis 0 fix: re-anchor t0 to Mon 2026-05-18 so the
+    # 24h stride in the strike loop below lands on Tue/Wed/Thu — all school days,
+    # no fériés. The original anchor Tue 2026-05-12 caused the +48h strike to
+    # land on 2026-05-14 = Ascension (a NC férié present in
+    # holidays.France(subdiv='NC', years=2026)); Plan 05-03's should_poll
+    # short-circuit at coordinator.py lines 154-169 then returned self.data
+    # without calling the executor, suppressing the second AuthError that the
+    # `pytest.raises(ConfigEntryAuthFailed)` context manager expected.
+    # 2026-05-18 → 2026-05-19 → 2026-05-20 → 2026-05-21 is post-Ascension,
+    # pre-Pentecôte (2026-05-25), and outside NC_VACATION_RANGES_2026. Clean.
+    t0 = datetime(2026, 5, 18, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))  # Mon afternoon — no férié in next 72h
     freezer.move_to(t0)
     today = t0.date()
     snapshot = snapshot_with_n_lessons_today(today, n=2)
