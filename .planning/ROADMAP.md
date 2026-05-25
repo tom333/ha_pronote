@@ -142,7 +142,7 @@ Plans:
 - [x] 05-02-PLAN.md — manifest.json holidays==0.97 + const.py Phase 5 additions (D-18) + scripts/probe_nc_holidays.py + PHASE-5-PROBE-NOTES.md HUMAN-UAT (Wave 1, COORD-05) — **autonomous: false** (probe sign-off checkpoint)
 
 **Wave 2** *(blocked on Wave 1 — coordinator wiring + i18n + integration tests)*
-- [ ] 05-03-PLAN.md — coordinator.py extension (atomic event gate + suspension/backoff short-circuits + _handle_failure + _reset_breaker_on_success + adaptive update_interval) + data.py holiday_dates field + __init__.py executor precompute + strings.json/translations/{en,fr}.json notification keys (fr.json CREATED) + tests/conftest.py mock_persistent_notification fixture + tests/test_coordinator.py 12 new tests (Wave 2, COORD-04 + COORD-05 + COORD-06 + COORD-07 + COORD-08 + COORD-09 + DIST-06)
+- [x] 05-03-PLAN.md — coordinator.py extension (atomic event gate + suspension/backoff short-circuits + _handle_failure + _reset_breaker_on_success + adaptive update_interval) + data.py holiday_dates field + __init__.py executor precompute + strings.json/translations/{en,fr}.json notification keys (fr.json CREATED) + tests/conftest.py mock_persistent_notification fixture + tests/test_coordinator.py 12 new tests (Wave 2, COORD-04 + COORD-05 + COORD-06 + COORD-07 + COORD-08 + COORD-09 + DIST-06)
 
 **UI hint**: no
 
