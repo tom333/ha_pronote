@@ -40,25 +40,25 @@ created: 2026-05-25
 
 | Validation ID | Requirement | SC# | Plan (TBD) | Wave | Test Type | Automated Command | Status |
 |---------------|-------------|-----|------------|------|-----------|-------------------|--------|
-| V-01 | COORD-04 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_compute_interval_weekday_afternoon -q` | ⬜ pending |
-| V-02 | COORD-04 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_compute_interval_base_weekday_morning -q` | ⬜ pending |
-| V-03 | COORD-05 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_should_poll_weekend_suspended -q` | ⬜ pending |
-| V-04 | COORD-05 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_should_poll_vacation_suspended -q` | ⬜ pending |
-| V-05 | COORD-05 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_should_poll_ferie_suspended -q` | ⬜ pending |
-| V-06 | COORD-06 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_should_fire_event_false_in_quiet_hours -q` | ⬜ pending |
-| V-07 | COORD-06 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_compute_interval_quiet_hours_cadence -q` | ⬜ pending |
+| V-01 | COORD-04 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_compute_interval_weekday_afternoon -q` | ⬜ pending |
+| V-02 | COORD-04 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_compute_interval_base_weekday_morning -q` | ⬜ pending |
+| V-03 | COORD-05 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_should_poll_weekend_suspended -q` | ⬜ pending |
+| V-04 | COORD-05 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_should_poll_vacation_suspended -q` | ⬜ pending |
+| V-05 | COORD-05 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_should_poll_ferie_suspended -q` | ⬜ pending |
+| V-06 | COORD-06 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_should_fire_event_false_in_quiet_hours -q` | ⬜ pending |
+| V-07 | COORD-06 | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_compute_interval_quiet_hours_cadence -q` | ⬜ pending |
 | V-08 | COORD-07 | SC#2 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_3_consecutive_auth_failures_set_backoff_4h_and_notification -q` | ⬜ pending |
-| V-09 | COORD-07 | SC#2 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_next_backoff_schedule_clamps_at_24h -q` | ⬜ pending |
+| V-09 | COORD-07 | SC#2 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_next_backoff_schedule_clamps_at_24h -q` | ⬜ pending |
 | V-10 | COORD-08 | SC#2 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_ip_suspended_triggers_backoff_and_notification -q` | ⬜ pending |
 | V-11 | COORD-08 | SC#2 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_recovery_resets_breaker_and_dismisses_notification -q` | ⬜ pending |
-| V-12 | COORD-09 | SC#4 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_jitter_within_pm_30s_bounds -q` | ⬜ pending |
-| V-13 | COORD-09 | SC#4 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_jitter_seeded_rng_reproducible -q` | ⬜ pending |
-| V-14 | DIST-06 | SC#3 | 05-01 (pol.) | 1 | unit-matrix | `pytest tests/test_politesse.py -q -k "tz_matrix"` (parametrized on `tz=[Europe/Paris, Pacific/Noumea]`) | ⬜ pending |
+| V-12 | COORD-09 | SC#4 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_jitter_within_pm_30s_bounds -q` | ⬜ pending |
+| V-13 | COORD-09 | SC#4 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_jitter_seeded_rng_reproducible -q` | ⬜ pending |
+| V-14 | DIST-06 | SC#3 | 05-01 (pol.) | 1 | unit-matrix | `pytest tests/test_politesse_tz_matrix.py -q -k "tz_matrix"` (file name encodes the `tz_matrix` substring per BLOCKER-1 fix — module-level pytestmark parametrizes every test on `school_tz=[Europe/Paris, Pacific/Noumea]`) | ⬜ pending |
 | V-15 | DIST-06 | SC#3 | 05-03 (coord.) | 2 | integration-matrix | `pytest tests/test_coordinator.py -q -k "tz_matrix"` | ⬜ pending |
-| V-16 | COORD-04 + SC#1 (end-to-end) | SC#1 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_24h_synthetic_clock_produces_at_least_5_distinct_intervals -q` (replays a synthetic 24h day across all branches; asserts cadence visibly adapts) | ⬜ pending |
-| V-17 | COORD-06 (end-to-end) | SC#1 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_168h_synthetic_week_zero_events_during_quiet_hours -q` (replays a synthetic 7-day week; asserts bus event count = 0 between 22h and 6h NC) | ⬜ pending |
-| V-18 | COORD-04 / D-06 primer | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_compute_interval_sunday_evening_primer -q` | ⬜ pending |
-| V-19 | COORD-04 / D-06 primer | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse.py::test_compute_interval_last_day_of_vacation_evening_primer -q` | ⬜ pending |
+| V-16 | COORD-04 + SC#1 (end-to-end) | SC#1 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_24h_synthetic_clock_tz_matrix_produces_at_least_5_distinct_intervals -q` (replays a synthetic 24h day across all branches; asserts cadence visibly adapts) | ⬜ pending |
+| V-17 | COORD-06 (end-to-end) | SC#1 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_168h_synthetic_week_tz_matrix_zero_events_during_quiet_hours -q` (replays a synthetic 7-day week; asserts bus event count = 0 between 22h and 6h NC) | ⬜ pending |
+| V-18 | COORD-04 / D-06 primer | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_compute_interval_sunday_evening_primer -q` | ⬜ pending |
+| V-19 | COORD-04 / D-06 primer | SC#1 | 05-01 (pol.) | 1 | unit | `pytest tests/test_politesse_tz_matrix.py::test_compute_interval_last_day_of_vacation_evening_primer -q` | ⬜ pending |
 | V-20 | D-10 suspension semantics | SC#1 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_async_update_data_skip_executor_during_suspension -q` (assert no pronotepy mock invocation when should_poll=False; assert sensors stay populated) | ⬜ pending |
 | V-21 | D-15 notification body | SC#2 | 05-03 (coord.) | 2 | integration | `pytest tests/test_coordinator.py::test_notification_body_contains_next_retry_time_and_strike_count -q` (assert template substitution + redacted message) | ⬜ pending |
 | V-22 | AST guard (D-16 invariant) | infra | 05-01 (pol.) | 1 | guard | `pytest tests/test_no_ha_imports.py -q` (extended to include politesse.py — zero homeassistant.* imports) | ⬜ pending |
@@ -70,9 +70,11 @@ created: 2026-05-25
 ## Wave 0 Requirements
 
 - [ ] `custom_components/ha_pronote/politesse.py` — NEW pure HA-free module (Plan 05-01 ships)
-- [ ] `tests/test_politesse.py` — NEW pure unit test file with TZ matrix parametrization (Plan 05-01 ships)
+- [ ] `tests/test_politesse_tz_matrix.py` — NEW pure unit test file with TZ matrix parametrization; file name encodes the `tz_matrix` substring per BLOCKER-1 fix (Plan 05-01 ships)
 - [ ] `custom_components/ha_pronote/manifest.json` — APPEND `holidays==0.97` (Plan 05-02 ships, per research D-02 verified version)
-- [ ] `custom_components/ha_pronote/const.py` — APPEND constants per CONTEXT.md D-18 (Plan 05-02 ships)
+- [ ] `custom_components/ha_pronote/const.py` — APPEND constants per CONTEXT.md D-18 + TROUBLESHOOTING_DOC_URL_BASE per BLOCKER-3 (Plan 05-02 ships)
+- [ ] `custom_components/ha_pronote/holiday_dates.py` — NEW HA-free neutral helper module per WR-2 (Plan 05-02 ships)
+- [ ] `scripts/check_translation_keys_phase5.py` — NEW recursive key-tree parity script per WR-5 (Plan 05-03 ships)
 - [ ] `tests/conftest.py` — ADD `mock_persistent_notification` fixture (helper around patching `persistent_notification.async_create` / `async_dismiss`) for Plan 05-03 coordinator tests
 - [ ] `tests/test_no_ha_imports.py` — APPEND `politesse.py` to the AST-guarded protected list (Plan 05-01 ships)
 - [ ] `tests/test_coordinator.py` — EXTEND with circuit-breaker + suspension + event-gate scenarios (Plan 05-03 ships)
