@@ -74,6 +74,10 @@ class PolitesseOptions:
     vacation_ranges: tuple[tuple[date, date], ...]  # default const.NC_VACATION_RANGES_2026
     holiday_dates: frozenset[date]  # injected per-entry by coordinator
     jitter_seconds: int  # default 30
+    # Phase 6 D-09 / OPT-02 — adaptive polling toggle. When False, compute_interval
+    # short-circuits to refresh_interval ± jitter without entering quiet/suspended/
+    # afternoon branches. Default True preserves Phase 5 behavior exactly.
+    adaptive_enabled: bool = True
 
 
 def is_school_day(

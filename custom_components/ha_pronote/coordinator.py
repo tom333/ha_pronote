@@ -433,6 +433,10 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             vacation_ranges=NC_VACATION_RANGES_2026,
             holiday_dates=holiday_dates,
             jitter_seconds=JITTER_SECONDS,
+            # Phase 6 D-09 / OPT-02 — read adaptive_polling_enabled from entry.options.
+            # bool(...) coerces None / missing / 0 / "" → False and any truthy → True.
+            # No _read_* helper needed: there's no parse-error path for a bool .get().
+            adaptive_enabled=bool(opts.get("adaptive_polling_enabled", True)),
         )
 
     def _handle_failure(self, err: PronoteIntegrationError, *, kind: str) -> None:
