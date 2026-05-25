@@ -485,3 +485,68 @@ class TestNaiveDatetimeRejection:
                 window_start=time(17, 0),
                 window_end=time(20, 0),
             )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 OPT-02 / D-09 — adaptive_enabled toggle tests
+# ---------------------------------------------------------------------------
+
+
+def test_compute_interval_respects_adaptive_disabled(school_tz: str) -> None:
+    """Phase 6 OPT-02 / D-09 — adaptive_enabled=False bypasses every adaptive branch.
+
+    At 18:00 Thursday (in school_tz) with tomorrow=school-day, adaptive_enabled=True
+    would hit the afternoon-window branch (15 min). With adaptive_enabled=False we
+    always return refresh_interval (30 min) ± jitter.
+
+    school_tz parameter from module pytestmark covers both Europe/Paris and Pacific/Noumea
+    (DIST-06): same tz is used for options.school_tz and for creating now, following
+    the Phase 5 _build_options pattern.
+    """
+    tz = ZoneInfo(school_tz)
+    options = PolitesseOptions(
+        school_tz=tz,
+        refresh_interval=timedelta(minutes=30),
+        afternoon_interval=timedelta(minutes=15),
+        afternoon_window=(time(17, 0), time(20, 0)),
+        quiet_hours=(time(22, 0), time(6, 0)),
+        suspended_cadence=timedelta(hours=6),
+        quiet_cadence=timedelta(hours=4),
+        vacation_ranges=(),
+        holiday_dates=frozenset(),
+        jitter_seconds=30,
+        adaptive_enabled=False,
+    )
+    # 2026-05-07 is a Thursday (weekday=3); 18:00 in school_tz is inside the
+    # 17h-20h afternoon-window branch (and Fri 08 May is a school day). With
+    # adaptive=False we bypass that branch and return refresh_interval ± jitter.
+    now = datetime(2026, 5, 7, 18, 0, tzinfo=tz)
+    rng = random.Random(42)
+    interval = compute_interval(now, options, rng=rng)
+    # 30 min ± 30s → in [29:30, 30:30]; never 15 min (the bypassed afternoon branch).
+    assert timedelta(minutes=29, seconds=30) <= interval <= timedelta(minutes=30, seconds=30)
+
+
+def test_compute_interval_adaptive_enabled_default_preserves_phase5(school_tz: str) -> None:
+    """Phase 6 regression — adaptive_enabled defaults True so Phase 5 branches still fire."""
+    tz = ZoneInfo(school_tz)
+    # Construct WITHOUT passing adaptive_enabled — proves the default is True.
+    options = PolitesseOptions(
+        school_tz=tz,
+        refresh_interval=timedelta(minutes=30),
+        afternoon_interval=timedelta(minutes=15),
+        afternoon_window=(time(17, 0), time(20, 0)),
+        quiet_hours=(time(22, 0), time(6, 0)),
+        suspended_cadence=timedelta(hours=6),
+        quiet_cadence=timedelta(hours=4),
+        vacation_ranges=(),
+        holiday_dates=frozenset(),
+        jitter_seconds=30,
+    )
+    assert options.adaptive_enabled is True
+    # Same Thursday-18h scenario — afternoon branch should win → 15 min ± 30s.
+    # (Fri 08 May is a school day, so the afternoon branch fires when adaptive=True.)
+    now = datetime(2026, 5, 7, 18, 0, tzinfo=tz)
+    rng = random.Random(42)
+    interval = compute_interval(now, options, rng=rng)
+    assert timedelta(minutes=14, seconds=30) <= interval <= timedelta(minutes=15, seconds=30)

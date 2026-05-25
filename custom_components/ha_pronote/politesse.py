@@ -317,6 +317,15 @@ def compute_interval(
     if now.tzinfo is None:
         raise ValueError("now must be tz-aware")
 
+    # Phase 6 D-09 / OPT-02 — short-circuit when the user disabled adaptive polling.
+    # Bypass the quiet / suspended / afternoon branches; always return
+    # refresh_interval + jitter, clamped to >= 1 min (matches the tail clamp).
+    if not options.adaptive_enabled:
+        jittered = options.refresh_interval + timedelta(
+            seconds=rng.uniform(-options.jitter_seconds, options.jitter_seconds)
+        )
+        return max(jittered, timedelta(minutes=1))
+
     # Branch 1 — quiet hours win over everything else (Sat 23h is quiet, not
     # suspended; D-04 ordering verified in TestComputeInterval/quiet-overlaps-weekend).
     if is_quiet_hours(
