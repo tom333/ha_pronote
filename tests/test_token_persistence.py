@@ -2,14 +2,45 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime as _datetime
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo as _ZoneInfo
 
 import pronotepy
 import pytest
 
 from custom_components.ha_pronote.api import AuthError, RateLimitedError
 from custom_components.ha_pronote.api.client import build_or_resume_client
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 Plan 05-04 — Gap closure: pin dt_util.now() to a clean NC school day
+# ---------------------------------------------------------------------------
+#
+# Plan 05-03 added two short-circuits at the top of coordinator._async_update_data
+# (lines 154-169) that return self.data without fetching when:
+#   - self._backoff_until > now (backoff active), OR
+#   - should_poll(now, options) == False (weekend / vacation / NC férié)
+#
+# If real-clock now() happens to be in any of those classes (e.g. running tests
+# on a Saturday, during NC vacation, or on a férié like Pentecôte 2026-05-25),
+# the existing Phase 3/4-era tests that drive _async_update_data() directly
+# (without mocking time) hit the short-circuit and never reach their expected
+# fetch-and-fail / fetch-and-emit paths.
+#
+# Fix: autouse module-level freezegun fixture pinning every test in this file
+# to Thursday 2026-05-07 14:00 NC — a verified clean school day where
+# should_poll == True, is_afternoon_window == False (14:00 < 17:00), and
+# is_quiet_hours == False (14:00 ∉ [22:00, 06:00)).
+@pytest.fixture(autouse=True)
+def _frozen_school_day(freezer):
+    """Pin dt_util.now() to Thu 2026-05-07 14:00 Pacific/Noumea for every test in this module.
+
+    Phase 5 Plan 05-04 gap closure. Tests that need their own clock simply call
+    ``freezer.move_to(...)`` at the top of the test body — that overrides this pin.
+    """
+    freezer.move_to(_datetime(2026, 5, 7, 14, 0, 0, tzinfo=_ZoneInfo("Pacific/Noumea")))
+    return freezer
 
 
 def test_build_or_resume_client_uses_token_login_when_session_present(monkeypatch):
