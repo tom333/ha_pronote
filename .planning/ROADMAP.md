@@ -158,7 +158,29 @@ Plans:
   2. After a Pronote password change, HA fires a reauth flow that asks ONLY for the new password (URL/account-type/username preserved); on success the entry resumes without losing any entity history or breaking existing automations
   3. User can open Options on an existing entry and change `refresh_interval` (15/30/60), toggle adaptive polling, set an afternoon interval, set an optional child nickname, and override `school_tz` — the coordinator reloads automatically without needing an HA restart
   4. User can change URL or account-type via the reconfigure flow without losing entity history (`unique_id` preserved across the migration)
-**Plans**: TBD
+**Plans:** 6 plans
+Plans:
+
+**Wave 1** *(parallel — pure foundations + read paths, no file overlap)*
+- [ ] 06-01-PLAN.md — const.py (DEFAULT_ADAPTIVE_POLLING_ENABLED, NICKNAME_MAX_LEN) + politesse.py (PolitesseOptions.adaptive_enabled + compute_interval short-circuit) + tests/test_politesse_tz_matrix.py (Wave 1, OPT-02 + OPT-03 + OPT-04)
+- [ ] 06-02-PLAN.md — coordinator._resolve_options (adaptive_polling_enabled read) + __init__.async_setup_entry (school_tz override via entry.options + ZoneInfo validation) + entity.device_info (nickname fallback) + tests (Wave 1, COORD-03 + OPT-03 + OPT-04)
+
+**Wave 2** *(blocked on Wave 1 — config_flow.py reauth surface)*
+- [ ] 06-03-PLAN.md — Reauth flow (D-01..D-04): async_step_reauth + async_step_reauth_confirm + _REAUTH_SCHEMA + i18n keys (EN + FR) + 5 tests (Wave 2, AUTH-05)
+
+**Wave 3** *(blocked on Wave 2 — config_flow.py reconfigure surface; file conflict with 06-03)*
+- [ ] 06-04-PLAN.md — Reconfigure flow (D-05..D-08): async_step_reconfigure + _RECONFIGURE_SCHEMA + set_active_child typed-wrap + child_identifier mismatch abort + i18n keys + 6 tests (Wave 3, AUTH-06)
+
+**Wave 4** *(blocked on Wave 3 — OptionsFlow on top of all read paths + flows)*
+- [ ] 06-05-PLAN.md — OptionsFlow multi-step (D-09..D-16): HaPronoteOptionsFlow(OptionsFlowWithReload) + _POLLING_SCHEMA (9 fields) + _DISPLAY_SCHEMA (2 fields, lambda v: v.strip()) + _options_schema_defaults helper + async_get_options_flow + i18n keys + 7 tests + test_options_change_triggers_reload + test_no_deprecated_add_update_listener_in_production (Wave 4, COORD-03 + OPT-01 + OPT-02 + OPT-03 + OPT-04)
+
+**Wave 5** *(blocked on Waves 2-4 — verifies multi-child invariants hold through all three mutation flows)*
+- [ ] 06-06-PLAN.md — Multi-child isolation tests (4 tests) — OptionsFlow / reauth / reconfigure / coordinator independence (Wave 5, AUTH-03)
+
+**Cross-cutting:**
+- D-12 REVISED (RESEARCH Critical Gotcha #1): OptionsFlowWithReload, NOT entry.add_update_listener (deprecated 2026-05-07)
+- D-16 REVISED (Gotcha #2): nickname schema uses `lambda v: v.strip()`, NOT `vol.Strip` (doesn't exist)
+- OptionsFlow __init__ (Gotcha #3): NO config_entry arg, NO self.config_entry assignment (read-only property since HA 2025.12)
 **UI hint**: yes
 
 ### Phase 7: Quality, Diagnostics & Distribution
@@ -186,5 +208,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Coordinator & First Sensor | 0/4 | Not started | - |
 | 4. Diff, Events & Full Sensor Suite | 7/7 | Complete   | 2026-05-24 |
 | 5. Politesse | 4/4 | Complete | 2026-05-25 |
-| 6. Auth Lifecycle & Options | 0/TBD | Not started | - |
+| 6. Auth Lifecycle & Options | 0/6 | Not started | - |
 | 7. Quality, Diagnostics & Distribution | 0/TBD | Not started | - |
