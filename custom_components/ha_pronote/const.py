@@ -85,3 +85,10 @@ AUTH_CIRCUIT_NOTIFICATION_ID_SUFFIX: Final = "auth_circuit"
 # f"{TROUBLESHOOTING_DOC_URL_BASE}#troubleshooting-{kind}" where
 # kind in {"ip-suspended", "auth-circuit"} (hyphen-form per D-15).
 TROUBLESHOOTING_DOC_URL_BASE: Final = "https://github.com/<placeholder-owner>/ha_pronote"
+
+# Phase 6 additions — OptionsFlow OPT-02 + OPT-03 defaults.
+# D-09 Phase 6 — adaptive polling toggle defaults to ON (preserve Phase 5 behavior).
+# D-16 Phase 6 — nickname length cap (40 chars covers long French + emoji names
+# without risking the 255-char limit on sensor state strings).
+DEFAULT_ADAPTIVE_POLLING_ENABLED: Final = True
+NICKNAME_MAX_LEN: Final = 40
