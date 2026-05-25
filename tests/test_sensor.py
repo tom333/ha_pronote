@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from custom_components.ha_pronote.api import CommunicationError
 from custom_components.ha_pronote.api.models import Grade, Information, Snapshot
 from custom_components.ha_pronote.const import DOMAIN
@@ -19,6 +21,36 @@ from homeassistant.components.sensor import SensorStateClass
 from homeassistant.helpers import entity_registry as er
 
 _SENSOR_ENTITY_ID_GUESS = "sensor.jean_dupont_lessons_today"
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 Plan 05-04 — Gap closure: pin dt_util.now() to a clean NC school day
+# ---------------------------------------------------------------------------
+#
+# Plan 05-03 added two short-circuits at the top of coordinator._async_update_data
+# (lines 154-169) that return self.data without fetching when:
+#   - self._backoff_until > now (backoff active), OR
+#   - should_poll(now, options) == False (weekend / vacation / NC férié)
+#
+# If real-clock now() happens to be in any of those classes (e.g. running tests
+# on a Saturday, during NC vacation, or on a férié like Pentecôte 2026-05-25),
+# the existing Phase 3/4-era tests that drive _async_update_data() directly
+# (without mocking time) hit the short-circuit and never reach their expected
+# fetch-and-fail / fetch-and-emit paths.
+#
+# Fix: autouse module-level freezegun fixture pinning every test in this file
+# to Thursday 2026-05-07 14:00 NC — a verified clean school day where
+# should_poll == True, is_afternoon_window == False (14:00 < 17:00), and
+# is_quiet_hours == False (14:00 ∉ [22:00, 06:00)).
+@pytest.fixture(autouse=True)
+def _frozen_school_day(freezer):
+    """Pin dt_util.now() to Thu 2026-05-07 14:00 Pacific/Noumea for every test in this module.
+
+    Phase 5 Plan 05-04 gap closure. Tests that need their own clock simply call
+    ``freezer.move_to(...)`` at the top of the test body — that overrides this pin.
+    """
+    freezer.move_to(datetime(2026, 5, 7, 14, 0, 0, tzinfo=ZoneInfo("Pacific/Noumea")))
+    return freezer
 
 
 async def test_sensor_native_value_equals_lessons_today_count(
@@ -524,7 +556,17 @@ async def test_grades_attrs_schema(
     assert isinstance(grade_list, list)
     assert len(grade_list) == 1
     # D-04: 9 required fields per grade
-    expected_keys = {"date", "subject", "grade", "out_of", "coefficient", "class_average", "class_min", "class_max", "comment"}
+    expected_keys = {
+        "date",
+        "subject",
+        "grade",
+        "out_of",
+        "coefficient",
+        "class_average",
+        "class_min",
+        "class_max",
+        "comment",
+    }
     assert set(grade_list[0].keys()) == expected_keys, f"Missing keys: {expected_keys - set(grade_list[0].keys())}"
     # D-03: grade value is float after normalisation
     assert grade_list[0]["grade"] == 15.0
