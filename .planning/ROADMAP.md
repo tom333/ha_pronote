@@ -134,7 +134,7 @@ Plans:
   2. Three consecutive auth failures or a single `Your IP address is suspended` response triggers exponential backoff (up to 24h cap) and creates a persistent HA notification with actionable instructions; the coordinator does not retry in a tight loop
   3. The pytest matrix runs every test on `Europe/Paris` AND `Pacific/Noumea` and both pass; time-mocked tests prove `compute_interval(now, options)` returns the right `timedelta` for every branch (weekday/weekend/vacation/quiet/afternoon)
   4. Polling intervals carry ±30s jitter so multiple HACS users hitting the same school server don't synchronise their requests
-**Plans:** 3 plans
+**Plans:** 4 plans
 Plans:
 
 **Wave 1** *(parallel — HA-free politesse module + manifest/const groundwork)*
@@ -143,6 +143,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 — coordinator wiring + i18n + integration tests)*
 - [x] 05-03-PLAN.md — coordinator.py extension (atomic event gate + suspension/backoff short-circuits + _handle_failure + _reset_breaker_on_success + adaptive update_interval) + data.py holiday_dates field + __init__.py executor precompute + strings.json/translations/{en,fr}.json notification keys (fr.json CREATED) + tests/conftest.py mock_persistent_notification fixture + tests/test_coordinator.py 12 new tests (Wave 2, COORD-04 + COORD-05 + COORD-06 + COORD-07 + COORD-08 + COORD-09 + DIST-06)
+
+**Wave 3** *(gap closure — fix 14 broken tests caused by Plan 05-03's should_poll short-circuit colliding with real-clock Pentecôte 2026-05-25)*
+- [ ] 05-04-PLAN.md — gap-closure: module-level autouse `_frozen_school_day` freezegun fixture in tests/test_coordinator.py + tests/test_sensor.py + tests/test_token_persistence.py pinned to Thu 2026-05-07 14:00 Pacific/Noumea + widen `test_update_interval_is_30_minutes` jitter envelope assertion + contingency `_handle_failure` production-fix arm for V-08 if the freezegun fix is insufficient (Wave 3, gap_closure=true, COORD-04 + COORD-05 + COORD-06 + COORD-07 + COORD-08 + COORD-09 + DIST-06)
 
 **UI hint**: no
 
