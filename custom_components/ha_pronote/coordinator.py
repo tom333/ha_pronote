@@ -13,6 +13,17 @@ D-09: mid-poll AuthError -> single fresh re-login + retry; second failure ->
       ConfigEntryAuthFailed (HA fires reauth — Phase 6).
 C-03: previous Snapshot stashed on self._previous_snapshot (Phase 4 reads).
 
+Phase 5 additions:
+D-04: update_interval mutated at end of _async_update_data via compute_interval(now, options).
+D-09: _fire_diff_events gated by should_fire_event(now, options) (atomic — top-of-method).
+D-10: _async_update_data short-circuits on backoff_until (skip fetch, return self.data) and
+      on not should_poll (skip fetch, return self.data) — but only when self.data is not None.
+D-12: in-memory circuit breaker — _consecutive_failures, _backoff_until on the instance.
+D-13: _handle_failure(err) ticks the counter on RateLimitedError(IP_SUSPENDED) and on
+      AuthError surviving _recover_from_auth_error.
+D-14: _reset_breaker_on_success() called on every successful poll; dismisses both notifs.
+D-15: persistent_notification.async_create deduped by notification_id = f"{DOMAIN}_{entry_id}_{kind}".
+
 Banned (CLAUDE.md "What NOT to Use" + Phase 1 D-30..D-35):
 - No legacy timeout helper (use ``asyncio.timeout`` if needed — not needed here).
 - No pytz (zoneinfo.ZoneInfo only).
@@ -24,11 +35,12 @@ Banned (CLAUDE.md "What NOT to Use" + Phase 1 D-30..D-35):
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time as datetime_time, timedelta
 from functools import partial
 import logging
 from typing import TYPE_CHECKING
 
+from homeassistant.components import persistent_notification  # Phase 5 D-15
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator, UpdateFailed
 import homeassistant.util.dt as dt_util
@@ -36,6 +48,7 @@ import homeassistant.util.dt as dt_util
 from .api import (
     AuthError,
     CommunicationError,
+    ErrorReason,                # Phase 5 D-13 — IP_SUSPENDED check
     PronoteIntegrationError,
     RateLimitedError,
     fetch_all,
@@ -44,13 +57,32 @@ from .api import (
 )
 from .api.client import build_or_resume_client
 from .const import (
-    DEFAULT_REFRESH_INTERVAL,
-    DOMAIN,
-    EVENT_NEW_GRADE,           # Phase 4 D-13
-    EVENT_NEW_INFORMATION,     # Phase 4 D-13
-    EVENT_SCHEDULE_CHANGED,    # Phase 4 D-13
+    AUTH_CIRCUIT_NOTIFICATION_ID_SUFFIX,    # Phase 5 D-18
+    BACKOFF_SCHEDULE,                       # Phase 5 D-18
+    DEFAULT_AFTERNOON_INTERVAL,             # Phase 5 D-18
+    DEFAULT_AFTERNOON_WINDOW,               # Phase 5 D-18
+    DEFAULT_QUIET_CADENCE,                  # Phase 5 D-18
+    DEFAULT_QUIET_HOURS,                    # Phase 5 D-18
+    DEFAULT_REFRESH_INTERVAL,               # pre-existing (Phase 3 D-24)
+    DEFAULT_SUSPENDED_CADENCE,              # Phase 5 D-18
+    DOMAIN,                                 # pre-existing (Phase 1)
+    EVENT_NEW_GRADE,                        # pre-existing (Phase 4 D-13)
+    EVENT_NEW_INFORMATION,                  # pre-existing (Phase 4 D-13)
+    EVENT_SCHEDULE_CHANGED,                 # pre-existing (Phase 4 D-13)
+    IP_SUSPENDED_NOTIFICATION_ID_SUFFIX,    # Phase 5 D-18
+    JITTER_SECONDS,                         # Phase 5 D-18
+    NC_VACATION_RANGES_2026,                # Phase 5 D-18
+    TROUBLESHOOTING_DOC_URL_BASE,           # Phase 5 — BLOCKER-3 fix (single-source base URL)
 )
 from .diff import diff_grades, diff_lessons, diff_notifications  # Phase 4 D-14
+from .holiday_dates import compute_holiday_dates_for_year  # Phase 5 WR-2 — neutral HA-free helper
+from .politesse import (                                          # Phase 5 D-16
+    PolitesseOptions,
+    compute_interval,
+    next_backoff,
+    should_fire_event,
+    should_poll,
+)
 
 # WR-04: cooldown applied between consecutive silent-recovery attempts to
 # avoid hammering an IP that is already being suspended by Pronote (Pitfall 2:
@@ -61,7 +93,7 @@ from .diff import diff_grades, diff_lessons, diff_notifications  # Phase 4 D-14
 _SILENT_RECOVERY_COOLDOWN = timedelta(minutes=5)
 
 if TYPE_CHECKING:
-    from datetime import date, datetime
+    from datetime import date
     from zoneinfo import ZoneInfo
 
     import pronotepy
@@ -101,10 +133,42 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         self._school_tz = school_tz  # D-23
         self._previous_snapshot: Snapshot | None = None  # C-03 — Phase 4 reads
         self._last_recovery_at: datetime | None = None  # WR-04 cooldown gate
+        # Phase 5 — D-12 circuit breaker state (in-memory; resets on HA restart).
+        self._consecutive_failures: int = 0
+        self._backoff_until: datetime | None = None  # tz-aware in school_tz when set
 
     async def _async_update_data(self) -> Snapshot:
         """Fetch a Snapshot via executor; capture session token on success (D-19)."""
-        today = dt_util.now(self._school_tz).date()  # D-23 — coordinator owns dt_util
+        # Phase 5 — year-rollover refresh for holiday_dates (cheap; ~ms; executor-wrapped).
+        # WR-2: imports `compute_holiday_dates_for_year` from the neutral `.holiday_dates`
+        # helper module (Plan 05-02) at module top — NOT a function-local import from `.`
+        # (which coupled coordinator.py to __init__.py internals and risked circular imports).
+        runtime = getattr(self.config_entry, "runtime_data", None) if self.config_entry else None
+        now_full = dt_util.now(self._school_tz)
+        if runtime is not None and getattr(runtime, "holiday_dates_year", None) != now_full.year:
+            runtime.holiday_dates = await self.hass.async_add_executor_job(
+                compute_holiday_dates_for_year, now_full.year
+            )
+            runtime.holiday_dates_year = now_full.year
+
+        # Phase 5 — D-10 backoff short-circuit (gated on self.data is not None so first poll fetches).
+        options = self._resolve_options()
+        if self._backoff_until is not None and now_full < self._backoff_until and self.data is not None:
+            # One-shot: ask HA to wake us when backoff expires (plus jitter via compute_interval).
+            self.update_interval = compute_interval(now_full, options)
+            _LOGGER.debug(
+                "Phase 5 backoff active until %s (strike %d) — skipping poll",
+                self._backoff_until.isoformat(), self._consecutive_failures,
+            )
+            return self.data  # keep sensors populated
+
+        # Phase 5 — D-10 should_poll short-circuit (weekend/vacation/férié + not in primer).
+        if not should_poll(now_full, options) and self.data is not None:
+            self.update_interval = compute_interval(now_full, options)
+            _LOGGER.debug("Phase 5 should_poll=False — skipping poll, sensors keep cached values")
+            return self.data
+
+        today = now_full.date()  # D-23 — coordinator owns dt_util (now_full computed above)
         try:
             snapshot = await self.hass.async_add_executor_job(
                 partial(
@@ -140,7 +204,10 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             # block the next aliased-loop attempt (the WR-04 contract).
             self._last_recovery_at = None
         except RateLimitedError as err:
-            # D-22 — IP_SUSPENDED -> UpdateFailed; Phase 5 reads .reason for backoff.
+            # Phase 5 — D-13: breaker tick on IP_SUSPENDED only; other rate-limit reasons stay transient.
+            if err.reason == ErrorReason.IP_SUSPENDED:
+                self._handle_failure(err, kind=IP_SUSPENDED_NOTIFICATION_ID_SUFFIX)
+            # D-22 — IP_SUSPENDED -> UpdateFailed; Phase 5 ALSO reads .reason for backoff above.
             raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05
         except (CommunicationError, PronoteIntegrationError) as err:
             raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05
@@ -169,6 +236,9 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         # hass.bus.async_fire is @callback — call from event loop only, NEVER from executor.
         self._fire_diff_events(previous, snapshot)
 
+        # Phase 5 — D-14 reset breaker on success + D-04 mutate update_interval (Pattern 4)
+        self._reset_breaker_on_success()
+        self.update_interval = compute_interval(now_full, options)
         return snapshot
 
     async def _recover_from_auth_error(
@@ -217,6 +287,10 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         # circuit-breaker signal Phase 5 needs.
         except AuthError as err:
             # Real auth failure on the retry — credentials genuinely invalid.
+            # Phase 5 — D-13: breaker tick on AuthError surviving silent recovery only.
+            # The WR-04 cooldown gate above already absorbs the aliased-CryptoError case,
+            # so reaching this arm means a genuine auth failure that survives recovery.
+            self._handle_failure(err, kind=AUTH_CIRCUIT_NOTIFICATION_ID_SUFFIX)
             raise ConfigEntryAuthFailed(f"[{err.reason}] {redact(err.message)}") from err
         except RateLimitedError as err:
             # IP suspended during recovery — Phase 5's circuit-breaker reads .reason.
@@ -252,6 +326,11 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
     ) -> None:
         """Fire typed bus events for each diff since previous snapshot.
 
+        Phase 5 (D-09 + PATTERNS.md Specifics memo): atomic gate — every event in a poll
+        fires or none, never half-suppressed. _previous_snapshot is updated BEFORE this
+        method runs (CR-03 ordering), so an early return here does NOT corrupt the diff
+        baseline for the next real poll.
+
         D-12: NO typed try/except — diff bugs surface raw in HA logs (no silent exceptions).
         D-15: all diff functions return [] when previous is None (EVENT-04 invariant).
         D-11: every payload is prepended with child_id, child_name, config_entry_id.
@@ -260,6 +339,16 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         is called from _async_update_data which runs on the event loop. Never wrap in
         async_add_executor_job.
         """
+        now = dt_util.now(self._school_tz)
+        options = self._resolve_options()
+        if not should_fire_event(now, options):
+            _LOGGER.debug(
+                "Phase 5 quiet-hours gate ACTIVE — suppressing all events for %s (entry %s)",
+                self._child_identifier,
+                self.config_entry.entry_id if self.config_entry else "?",
+            )
+            return
+
         child_context = {
             "child_id": self._child_identifier,                   # D-11 — frozen slug
             "child_name": self.config_entry.data["child_name"],   # D-11 — display name
@@ -281,3 +370,187 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             self.hass.bus.async_fire(
                 EVENT_NEW_INFORMATION, {**child_context, **info.to_payload()}
             )
+
+    def _resolve_options(self) -> PolitesseOptions:
+        """D-17 — adapter from entry.options dict to typed PolitesseOptions.
+
+        Phase 6's OptionsFlow declares voluptuous schemas matching these key names;
+        Phase 5 only reads. On malformed input, log warning + fall back to default
+        (per feedback_no_silent_exceptions.md — the warning IS the trace; the default
+        is the fallback; we NEVER swallow the malformed key silently).
+        """
+        opts = self.config_entry.options if self.config_entry else {}
+
+        def _read_minutes(key: str, default: timedelta) -> timedelta:
+            raw = opts.get(key)
+            if raw is None:
+                return default
+            try:
+                return timedelta(minutes=int(raw))
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Phase 5 _resolve_options: malformed option %s=%r; falling back to %s",
+                    key, raw, default,
+                )
+                return default
+
+        def _read_time(key: str, default: datetime_time) -> datetime_time:
+            raw = opts.get(key)
+            if raw is None:
+                return default
+            try:
+                return datetime_time.fromisoformat(str(raw))
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Phase 5 _resolve_options: malformed option %s=%r; falling back to %s",
+                    key, raw, default,
+                )
+                return default
+
+        # holiday_dates lives on runtime_data — but the coordinator may be called
+        # BEFORE runtime_data is fully populated (during async_config_entry_first_refresh
+        # the dataclass exists but is constructed AFTER the first refresh). Safe fallback:
+        # if runtime_data lacks holiday_dates, use frozenset() (the first-poll fetch will
+        # still happen because should_poll's primer + tomorrow=school logic depends on
+        # is_school_day which treats an empty holiday_dates set as "no fériés today").
+        runtime = getattr(self.config_entry, "runtime_data", None) if self.config_entry else None
+        holiday_dates = getattr(runtime, "holiday_dates", frozenset()) if runtime else frozenset()
+
+        return PolitesseOptions(
+            school_tz=self._school_tz,
+            refresh_interval=_read_minutes("refresh_interval", DEFAULT_REFRESH_INTERVAL),
+            afternoon_interval=_read_minutes("afternoon_interval", DEFAULT_AFTERNOON_INTERVAL),
+            afternoon_window=(
+                _read_time("afternoon_window_start", DEFAULT_AFTERNOON_WINDOW[0]),
+                _read_time("afternoon_window_end", DEFAULT_AFTERNOON_WINDOW[1]),
+            ),
+            quiet_hours=(
+                _read_time("quiet_hours_start", DEFAULT_QUIET_HOURS[0]),
+                _read_time("quiet_hours_end", DEFAULT_QUIET_HOURS[1]),
+            ),
+            suspended_cadence=_read_minutes("suspended_cadence", DEFAULT_SUSPENDED_CADENCE),
+            quiet_cadence=_read_minutes("quiet_cadence", DEFAULT_QUIET_CADENCE),
+            vacation_ranges=NC_VACATION_RANGES_2026,
+            holiday_dates=holiday_dates,
+            jitter_seconds=JITTER_SECONDS,
+        )
+
+    def _handle_failure(self, err: PronoteIntegrationError, *, kind: str) -> None:
+        """D-13 / D-15 — tick the breaker + create a persistent notification.
+
+        Called from the typed-error except arms in _async_update_data and
+        _recover_from_auth_error. The exception STILL propagates via the caller's
+        raise — this method is ADDITIVE (per feedback_no_silent_exceptions.md).
+
+        Args:
+            err: The typed PronoteIntegrationError that triggered the strike.
+            kind: One of IP_SUSPENDED_NOTIFICATION_ID_SUFFIX | AUTH_CIRCUIT_NOTIFICATION_ID_SUFFIX —
+                  determines the notification_id suffix and the body template.
+        """
+        self._consecutive_failures += 1
+        now = dt_util.now(self._school_tz)
+        backoff = next_backoff(self._consecutive_failures - 1, schedule=BACKOFF_SCHEDULE)
+        self._backoff_until = now + backoff
+
+        if self.config_entry is None:
+            return  # cannot create notification without an entry id
+
+        notification_id = f"{DOMAIN}_{self.config_entry.entry_id}_{kind}"
+        language = (
+            self.hass.config.language if self.hass.config.language else "en"
+        ).split("-")[0]  # 'fr-FR' -> 'fr'
+
+        title, message = self._format_notification(
+            kind=kind,
+            err=err,
+            strike_count=self._consecutive_failures,
+            retry_at=self._backoff_until,
+            language=language,
+        )
+        persistent_notification.async_create(
+            self.hass,
+            message=message,
+            title=title,
+            notification_id=notification_id,
+        )
+
+    def _reset_breaker_on_success(self) -> None:
+        """D-14 — clear counters + dismiss both notifications. Idempotent.
+
+        HA's persistent_notification.async_dismiss silently no-ops when the id
+        doesn't exist, so calling it on every successful poll is safe.
+        """
+        self._consecutive_failures = 0
+        self._backoff_until = None
+        if self.config_entry is None:
+            return
+        persistent_notification.async_dismiss(
+            self.hass,
+            f"{DOMAIN}_{self.config_entry.entry_id}_{IP_SUSPENDED_NOTIFICATION_ID_SUFFIX}",
+        )
+        persistent_notification.async_dismiss(
+            self.hass,
+            f"{DOMAIN}_{self.config_entry.entry_id}_{AUTH_CIRCUIT_NOTIFICATION_ID_SUFFIX}",
+        )
+
+    @staticmethod
+    def _format_notification(
+        *,
+        kind: str,
+        err: PronoteIntegrationError,
+        strike_count: int,
+        retry_at: datetime,
+        language: str,
+    ) -> tuple[str, str]:
+        """D-15 / C-05 — French primary, English fallback. Picks by hass.config.language."""
+        redacted = redact(err.message)
+        retry_str = retry_at.strftime("%H:%M le %d/%m" if language == "fr" else "%H:%M on %d/%m")
+        # BLOCKER-3 fix: build kind-specific anchor from the single base URL const
+        # (Plan 05-02 ships TROUBLESHOOTING_DOC_URL_BASE). D-15 specifies hyphenated
+        # anchors (#troubleshooting-ip-suspended / #troubleshooting-auth-circuit) —
+        # convert the kind suffix (which uses underscores for HA notification_id
+        # conventions) to the hyphenated anchor form here. Phase 7 DIST-07 fills the
+        # <placeholder-owner> in TROUBLESHOOTING_DOC_URL_BASE — in ONE const, not
+        # many call sites.
+        anchor_kind = kind.replace("_", "-")  # "ip_suspended" -> "ip-suspended"; "auth_circuit" -> "auth-circuit"
+        troubleshooting_url = f"{TROUBLESHOOTING_DOC_URL_BASE}#troubleshooting-{anchor_kind}"
+
+        if kind == IP_SUSPENDED_NOTIFICATION_ID_SUFFIX:
+            if language == "fr":
+                title = "[HA-Pronote] IP suspendue par Pronote"
+                message = (
+                    f"L'IP de votre instance Home Assistant a été suspendue par le serveur Pronote. "
+                    f"Tentative N°{strike_count}. Prochaine tentative à {retry_str} (heure NC). "
+                    f"Augmentez votre intervalle de polling si cela se reproduit. "
+                    f"Détail technique : {redacted}. "
+                    f"Aide : {troubleshooting_url}"
+                )
+            else:
+                title = "[HA-Pronote] IP suspended by Pronote"
+                message = (
+                    f"Your Home Assistant IP has been suspended by the Pronote server. "
+                    f"Attempt #{strike_count}. Next retry at {retry_str} (NC time). "
+                    f"Increase your polling interval if this happens again. "
+                    f"Technical detail: {redacted}. "
+                    f"Help: {troubleshooting_url}"
+                )
+        else:  # AUTH_CIRCUIT_NOTIFICATION_ID_SUFFIX
+            if language == "fr":
+                title = "[HA-Pronote] Identifiants Pronote rejetés"
+                message = (
+                    f"Plusieurs tentatives d'authentification ont échoué (tentative N°{strike_count}). "
+                    f"Prochaine tentative à {retry_str} (heure NC). "
+                    f"Si votre mot de passe Pronote a changé, lancez la procédure de ré-authentification. "
+                    f"Détail technique : {redacted}. "
+                    f"Aide : {troubleshooting_url}"
+                )
+            else:
+                title = "[HA-Pronote] Pronote credentials rejected"
+                message = (
+                    f"Multiple authentication attempts failed (attempt #{strike_count}). "
+                    f"Next retry at {retry_str} (NC time). "
+                    f"If your Pronote password changed, run the re-authentication flow. "
+                    f"Technical detail: {redacted}. "
+                    f"Help: {troubleshooting_url}"
+                )
+        return title, message

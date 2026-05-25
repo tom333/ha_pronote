@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connexion à Pronote",
+        "data": {
+          "url": "URL de votre espace Pronote",
+          "account_type": "Type de compte",
+          "username": "Identifiant",
+          "password": "Mot de passe"
+        },
+        "data_description": {
+          "url": "URL complète de votre espace Pronote (ex : https://0123456a.index-education.net/pronote/eleve.html).",
+          "account_type": "'eleve' pour le compte élève, 'parent' pour le portail parent."
+        }
+      },
+      "pick_child": {
+        "title": "Sélectionner un enfant",
+        "description": "Votre compte Pronote regroupe plusieurs enfants. Choisissez celui à ajouter. Pour en ajouter un autre, relancez la configuration.",
+        "data": {
+          "child_index": "Enfant"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Identifiants invalides. Vérifiez votre identifiant et votre mot de passe.",
+      "cannot_connect": "Impossible de joindre Pronote. Vérifiez l'URL et votre connexion réseau.",
+      "ip_suspended": "Votre IP a été suspendue temporairement par Pronote. Patientez quelques minutes avant de réessayer.",
+      "unknown": "Une erreur inattendue est survenue."
+    },
+    "abort": {
+      "already_configured": "Ce compte / enfant Pronote est déjà configuré."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "lessons_today": {
+        "name": "Cours du jour"
+      },
+      "grades": {
+        "name": "Notes"
+      },
+      "notifications": {
+        "name": "Notifications"
+      }
+    },
+    "calendar": {
+      "calendar": {
+        "name": "Emploi du temps"
+      }
+    }
+  },
+  "notification": {
+    "ip_suspended": {
+      "title": "[HA-Pronote] IP suspendue par Pronote",
+      "message": "L'IP de votre instance Home Assistant a été suspendue par le serveur Pronote. Voir la notification persistante pour le détail et les instructions."
+    },
+    "auth_circuit": {
+      "title": "[HA-Pronote] Identifiants Pronote rejetés",
+      "message": "Plusieurs tentatives d'authentification ont échoué. Voir la notification persistante pour les instructions de ré-authentification."
+    }
+  }
+}
