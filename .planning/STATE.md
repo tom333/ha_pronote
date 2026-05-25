@@ -4,8 +4,8 @@ milestone: v0.1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 context gathered
-last_updated: "2026-05-25T02:12:13.091Z"
-last_activity: 2026-05-25 -- Phase 5 planning complete
+last_updated: "2026-05-25T02:13:15.148Z"
+last_activity: 2026-05-25 -- Phase 05 execution started
 progress:
   total_phases: 7
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 04 — Diff, Events & Full Sensor Suite
+**Current focus:** Phase 05 — politesse-adaptive-polling-quiet-hours-circuit-breaker
 
 ## Current Position
 
-Phase: 04 (Diff, Events & Full Sensor Suite) — EXECUTING
-Plan: 1 of 7
-Status: Ready to execute
-Last activity: 2026-05-25 -- Phase 5 planning complete
+Phase: 05 (politesse-adaptive-polling-quiet-hours-circuit-breaker) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 05
+Last activity: 2026-05-25 -- Phase 05 execution started
 
 Progress: [          ] 0% of Phase 3
 
