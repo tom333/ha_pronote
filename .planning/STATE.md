@@ -4,14 +4,14 @@ milestone: v0.1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 context gathered
-last_updated: "2026-05-25T05:29:25.512Z"
-last_activity: 2026-05-25 -- Phase 5 planning complete
+last_updated: "2026-05-25T06:01:51.654Z"
+last_activity: 2026-05-25
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 24
-  completed_plans: 23
-  percent: 96
+  completed_plans: 24
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 05 — politesse-adaptive-polling-quiet-hours-circuit-breaker
+**Current focus:** Phase 05 — Politesse — Adaptive Polling, Quiet Hours, Circuit Breaker
 
 ## Current Position
 
-Phase: 05 (politesse-adaptive-polling-quiet-hours-circuit-breaker) — EXECUTING
-Plan: 1 of 3
+Phase: 05 (Politesse — Adaptive Polling, Quiet Hours, Circuit Breaker) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-05-25 -- Phase 5 planning complete
+Last activity: 2026-05-25
 
-Progress: [          ] 0% of Phase 3
+Progress: [██████████] 100%
 
 ## Performance Metrics
 

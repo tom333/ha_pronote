@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: API & Diff Layer (HA-free)** - Pure-Python `api/` (pronotepy wrapper) + `diff/` (lessons/grades/notifs) tested in plain pytest
 - [ ] **Phase 3: Coordinator & First Sensor** - End-to-end loop: Config Flow validates credentials, coordinator polls Pronote, one lessons-today sensor displays in HA
 - [x] **Phase 4: Diff, Events & Full Sensor Suite** - The core value: typed bus events fire on schedule changes, plus full EDT/grades/notifs sensors and the calendar entity (completed 2026-05-24)
-- [ ] **Phase 5: Politesse — Adaptive Polling, Quiet Hours, Circuit Breaker** - Conservative defaults safe to install: NC-aware calendar, 17h–20h tighter polling, IP-ban circuit breaker
+- [x] **Phase 5: Politesse — Adaptive Polling, Quiet Hours, Circuit Breaker** - Conservative defaults safe to install: NC-aware calendar, 17h–20h tighter polling, IP-ban circuit breaker (completed 2026-05-25)
 - [ ] **Phase 6: Auth Lifecycle & Options** - Reauth, reconfigure, multi-child support, Options Flow — no entry ever bricks on password change
 - [ ] **Phase 7: Quality, Diagnostics & Distribution** - Diagnostics with redaction, repair issues, full translations, README, v0.1.0 HACS-installable tag
 
@@ -145,7 +145,7 @@ Plans:
 - [x] 05-03-PLAN.md — coordinator.py extension (atomic event gate + suspension/backoff short-circuits + _handle_failure + _reset_breaker_on_success + adaptive update_interval) + data.py holiday_dates field + __init__.py executor precompute + strings.json/translations/{en,fr}.json notification keys (fr.json CREATED) + tests/conftest.py mock_persistent_notification fixture + tests/test_coordinator.py 12 new tests (Wave 2, COORD-04 + COORD-05 + COORD-06 + COORD-07 + COORD-08 + COORD-09 + DIST-06)
 
 **Wave 3** *(gap closure — fix 14 broken tests caused by Plan 05-03's should_poll short-circuit colliding with real-clock Pentecôte 2026-05-25)*
-- [ ] 05-04-PLAN.md — gap-closure: module-level autouse `_frozen_school_day` freezegun fixture in tests/test_coordinator.py + tests/test_sensor.py + tests/test_token_persistence.py pinned to Thu 2026-05-07 14:00 Pacific/Noumea + widen `test_update_interval_is_30_minutes` jitter envelope assertion + contingency `_handle_failure` production-fix arm for V-08 if the freezegun fix is insufficient (Wave 3, gap_closure=true, COORD-04 + COORD-05 + COORD-06 + COORD-07 + COORD-08 + COORD-09 + DIST-06)
+- [x] 05-04-PLAN.md — gap-closure: module-level autouse `_frozen_school_day` freezegun fixture in tests/test_coordinator.py + tests/test_sensor.py + tests/test_token_persistence.py pinned to Thu 2026-05-07 14:00 Pacific/Noumea + widen `test_update_interval_is_30_minutes` jitter envelope assertion + contingency `_handle_failure` production-fix arm for V-08 if the freezegun fix is insufficient (Wave 3, gap_closure=true, COORD-04 + COORD-05 + COORD-06 + COORD-07 + COORD-08 + COORD-09 + DIST-06)
 
 **UI hint**: no
 
@@ -185,6 +185,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 2. API & Diff Layer | 4/4 | Complete | 2026-05-06 |
 | 3. Coordinator & First Sensor | 0/4 | Not started | - |
 | 4. Diff, Events & Full Sensor Suite | 7/7 | Complete   | 2026-05-24 |
-| 5. Politesse | 0/TBD | Not started | - |
+| 5. Politesse | 4/4 | Complete | 2026-05-25 |
 | 6. Auth Lifecycle & Options | 0/TBD | Not started | - |
 | 7. Quality, Diagnostics & Distribution | 0/TBD | Not started | - |
