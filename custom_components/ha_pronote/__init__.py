@@ -61,7 +61,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> b
     if missing:
         raise ConfigEntryNotReady(f"entry.data missing required keys: {missing}")
 
-    school_tz = ZoneInfo(DEFAULT_SCHOOL_TZ)  # Phase 6 OPT-04 reads entry.options.
+    # Phase 6 D-09 / OPT-04 — per-entry school_tz override via entry.options.
+    # The OptionsFlow (Plan 06-05) validates this string at submit-time inside
+    # async_step_display (Pitfall #5) — that is the PRIMARY validation gate.
+    # Here, ZoneInfo() is called directly with NO try/except: per user feedback
+    # memory feedback_no_silent_exceptions.md, ZoneInfoNotFoundError MUST propagate
+    # raw. HA logs the traceback; the entry enters SETUP_ERROR with the raw error
+    # text visible to the developer / power-user who manually edited .storage JSON.
+    school_tz_name = entry.options.get("school_tz", DEFAULT_SCHOOL_TZ)
+    school_tz = ZoneInfo(school_tz_name)
     device_name = f"home-assistant-{entry.entry_id[:8]}"  # AUTH-07 / D-18 / C-04.
 
     # D-07: try token_login fast path first; build_or_resume_client falls back
