@@ -6,7 +6,9 @@ coordinator can call ``client.export_credentials()`` between polls and reuse
 the client without rebuilding (Anti-Pattern 7).
 
 NOT frozen: ``client`` is reassigned by the coordinator on D-09 silent-recovery
-when a mid-poll AuthError triggers a single fresh re-login.
+when a mid-poll AuthError triggers a single fresh re-login. Phase 5:
+``holiday_dates`` + ``holiday_dates_year`` are also reassigned by the
+coordinator on year rollover.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from datetime import date
     from zoneinfo import ZoneInfo
 
     import pronotepy
@@ -33,6 +36,9 @@ class PronoteData:
     child_identifier: str
     child_index: int | None
     school_tz: ZoneInfo
+    # Phase 5 (C-07, D-02): NC fériés precomputed at async_setup_entry; reassigned on year rollover.
+    holiday_dates: frozenset[date]
+    holiday_dates_year: int
 
 
 type PronoteConfigEntry = ConfigEntry[PronoteData]

@@ -21,12 +21,14 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+import homeassistant.util.dt as dt_util
 
 from .api import AuthError, PronoteIntegrationError, set_active_child
 from .api.client import build_or_resume_client
 from .const import DEFAULT_SCHOOL_TZ, DOMAIN, PLATFORMS
 from .coordinator import PronoteDataUpdateCoordinator
 from .data import PronoteConfigEntry, PronoteData
+from .holiday_dates import compute_holiday_dates_for_year  # Phase 5 WR-2 — neutral HA-free helper
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -96,6 +98,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> b
         except PronoteIntegrationError as err:
             raise ConfigEntryNotReady(str(err)) from err
 
+    # Phase 5 (C-07, D-02, WR-2): precompute NC fériés for current school year via
+    # the neutral helper module. Executor-wrapped even though holidays==0.97 does no
+    # I/O (RESEARCH verified) — keeps the policy uniform per CLAUDE.md "executor for
+    # any blocking work" discipline.
+    now_year = dt_util.now(school_tz).year
+    holiday_dates = await hass.async_add_executor_job(compute_holiday_dates_for_year, now_year)
+
     coordinator = PronoteDataUpdateCoordinator(
         hass,
         entry,
@@ -113,6 +122,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> b
         child_identifier=entry.data["child_identifier"],
         child_index=child_index,
         school_tz=school_tz,
+        holiday_dates=holiday_dates,
+        holiday_dates_year=now_year,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)  # D-25
