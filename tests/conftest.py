@@ -194,3 +194,47 @@ def mock_pronote_client_with_grades(mock_pronote_client):
     mock_grade.comment = ""
     mock_pronote_client.current_period.grades = [mock_grade]
     return mock_pronote_client
+
+
+# Phase 5 (C-06) — patch homeassistant.components.persistent_notification surface so
+# coordinator tests can assert on create/dismiss call args without wiring HA's
+# notifications component. async_create + async_dismiss are @callback (synchronous)
+# per RESEARCH.md §"HA persistent_notification API" — MagicMock is correct, AsyncMock
+# would silently pass on a non-awaited call.
+
+
+@pytest.fixture
+def mock_persistent_notification(monkeypatch):
+    """Patch persistent_notification.async_create + async_dismiss with MagicMocks.
+
+    Returns a SimpleNamespace with `.create` and `.dismiss` MagicMocks so tests can
+    assert on call args:
+
+        mock_persistent_notification.create.assert_called_once_with(
+            hass, message=..., title=..., notification_id="ha_pronote_<entry_id>_ip_suspended"
+        )
+    """
+    from types import SimpleNamespace
+
+    create_mock = MagicMock()
+    dismiss_mock = MagicMock()
+
+    # Patch BOTH the source module AND the import site used by coordinator.py.
+    # coordinator.py does `from homeassistant.components import persistent_notification`
+    # and calls `persistent_notification.async_create(...)`, so the import-site patch
+    # is what tests actually need; the source-module patch is defensive.
+    monkeypatch.setattr(
+        "homeassistant.components.persistent_notification.async_create", create_mock
+    )
+    monkeypatch.setattr(
+        "homeassistant.components.persistent_notification.async_dismiss", dismiss_mock
+    )
+    monkeypatch.setattr(
+        "custom_components.ha_pronote.coordinator.persistent_notification.async_create",
+        create_mock,
+    )
+    monkeypatch.setattr(
+        "custom_components.ha_pronote.coordinator.persistent_notification.async_dismiss",
+        dismiss_mock,
+    )
+    return SimpleNamespace(create=create_mock, dismiss=dismiss_mock)

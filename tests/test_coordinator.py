@@ -882,3 +882,717 @@ async def test_event_payload_contains_child_context(
         assert "config_entry_id" in payload, f"Missing config_entry_id in {payload}"
         assert payload["child_id"] == "jean_dupont"   # D-11 slug
         assert payload["child_name"] == "Jean Dupont"  # D-11 display name
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 tests — circuit breaker + adaptive polling + atomic event gate
+# Coverage map: V-08, V-10, V-11, V-15 (matrix), V-16, V-17, V-20, V-21
+# Plus breaker-no-tick negatives: CommunicationError, RateLimitedError(other),
+# WR-04-aliased AuthError.
+# ---------------------------------------------------------------------------
+
+
+async def test_3_consecutive_auth_failures_set_backoff_4h_and_notification(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """V-08: 3 consecutive AuthError -> _consecutive_failures==3, backoff ~= 4h,
+    _format_notification fired 3 times with auth_circuit kind.
+    """
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.const import (
+        BACKOFF_SCHEDULE,
+        DOMAIN,
+        JITTER_SECONDS,
+    )
+
+    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))  # Tue afternoon
+    freezer.move_to(t0)
+    today = t0.date()
+    snapshot = snapshot_with_n_lessons_today(today, n=2)
+
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot, today
+    )
+
+    fresh_client = MagicMock()
+    fresh_client.set_child = MagicMock()
+    fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
+
+    # Reset the fixture mocks (the first refresh during _setup_coordinator
+    # already invoked _reset_breaker_on_success which fired 2 dismiss calls).
+    mock_persistent_notification.create.reset_mock()
+    mock_persistent_notification.dismiss.reset_mock()
+
+    # Three sequential refresh attempts, each: AuthError then AuthError on retry
+    # -> ConfigEntryAuthFailed; advance the freezer between calls so the prior
+    # backoff window has expired (so the breaker short-circuit at top doesn't
+    # kick in) and so the WR-04 5-minute cooldown is also clear.
+    for strike in range(3):
+        # Advance to expire backoff AND WR-04 cooldown. After strike 1: 1h. After
+        # strike 2: 2h. After strike 3: 4h. Use a generous delta beyond strike 3 too.
+        freezer.move_to(t0 + timedelta(hours=24 * (strike + 1)))
+        with (
+            patch(
+                "custom_components.ha_pronote.coordinator.fetch_all",
+                side_effect=[
+                    AuthError("session expired"),
+                    AuthError("recovery fail"),
+                ],
+            ),
+            patch(
+                "custom_components.ha_pronote.coordinator.build_or_resume_client",
+                return_value=fresh_client,
+            ),
+            pytest.raises(ConfigEntryAuthFailed),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+    assert coordinator._consecutive_failures == 3  # noqa: SLF001
+    assert coordinator._backoff_until is not None  # noqa: SLF001
+
+    # 3rd strike -> BACKOFF_SCHEDULE[2] = 4h (within jitter slack)
+    from custom_components.ha_pronote.coordinator import dt_util as coord_dt_util
+    now_school = coord_dt_util.now(coordinator._school_tz)  # noqa: SLF001
+    delta = coordinator._backoff_until - now_school  # noqa: SLF001
+    expected = BACKOFF_SCHEDULE[2]
+    # Allow generous slack because the freezer moved us to t0+72h before the strike
+    # and _handle_failure set backoff_until = (now + 4h) at that moment; here we
+    # measure relative to the SAME freezer now, so the difference should be exactly 4h.
+    slack = timedelta(seconds=JITTER_SECONDS + 5)
+    assert expected - slack <= delta <= expected + slack, (
+        f"3rd strike backoff delta {delta} not within ±{slack} of {expected}"
+    )
+
+    # 3 notifications fired, all with auth_circuit kind
+    assert mock_persistent_notification.create.call_count == 3
+    auth_id_suffix = f"{DOMAIN}_{mock_config_entry.entry_id}_auth_circuit"
+    for call in mock_persistent_notification.create.call_args_list:
+        assert call.kwargs["notification_id"] == auth_id_suffix
+
+
+async def test_ip_suspended_triggers_backoff_and_notification(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """V-10: RateLimitedError(IP_SUSPENDED) -> UpdateFailed + backoff + IP notification."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api import ErrorReason
+    from custom_components.ha_pronote.const import DOMAIN
+
+    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(t0)
+    today = t0.date()
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+    mock_persistent_notification.create.reset_mock()
+    mock_persistent_notification.dismiss.reset_mock()
+
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=RateLimitedError(
+                "Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED
+            ),
+        ),
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    assert coordinator._consecutive_failures == 1  # noqa: SLF001
+    assert coordinator._backoff_until is not None  # noqa: SLF001
+    assert mock_persistent_notification.create.call_count == 1
+    call = mock_persistent_notification.create.call_args
+    assert call.kwargs["notification_id"] == f"{DOMAIN}_{mock_config_entry.entry_id}_ip_suspended"
+    assert call.kwargs["notification_id"].endswith("_ip_suspended")
+    # default language=en -> "Attempt #1"
+    assert "#1" in call.kwargs["message"] or "N°1" in call.kwargs["message"]
+
+
+async def test_recovery_resets_breaker_and_dismisses_notification(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """V-11: a successful poll AFTER a strike clears counters + dismisses both notifs."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api import ErrorReason
+
+    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(t0)
+    today = t0.date()
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+    # Reset mocks AFTER setup (first refresh's success already dismissed both)
+    mock_persistent_notification.create.reset_mock()
+    mock_persistent_notification.dismiss.reset_mock()
+
+    # Trigger 1 strike via IP_SUSPENDED
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=RateLimitedError(
+                "Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED
+            ),
+        ),
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    assert coordinator._consecutive_failures == 1  # noqa: SLF001
+    assert coordinator._backoff_until is not None  # noqa: SLF001
+
+    # Advance past backoff window
+    freezer.move_to(coordinator._backoff_until + timedelta(seconds=1))  # noqa: SLF001
+
+    # Next call returns a successful snapshot -> reset counters + dismiss both
+    next_snapshot = snapshot_with_n_lessons_today(today, n=2)
+    with patch(
+        "custom_components.ha_pronote.coordinator.fetch_all",
+        return_value=next_snapshot,
+    ):
+        result = await coordinator._async_update_data()  # noqa: SLF001
+
+    assert result is next_snapshot
+    assert coordinator._consecutive_failures == 0  # noqa: SLF001
+    assert coordinator._backoff_until is None  # noqa: SLF001
+    assert mock_persistent_notification.dismiss.call_count == 2
+
+
+async def test_24h_synthetic_clock_tz_matrix_produces_at_least_5_distinct_intervals(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """V-16 (+ V-15 matrix): 24h synthetic clock produces >=5 distinct cadences.
+
+    Note: not parametrized on school_tz because async_setup_entry uses
+    DEFAULT_SCHOOL_TZ from const.py. The matrix variant runs the politesse
+    primitives across timezones via test_politesse_tz_matrix.py (Plan 05-01).
+    Keeping name with tz_matrix suffix for VALIDATION.md selector parity.
+    """
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    t0 = datetime(2026, 5, 12, 0, 0, tzinfo=ZoneInfo("Pacific/Noumea"))  # Tue midnight
+    freezer.move_to(t0)
+    today = t0.date()
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=2), today
+    )
+
+    intervals = []
+    for h in [6, 10, 14, 18, 19, 23, 26]:
+        freezer.move_to(t0 + timedelta(hours=h))
+        snap = snapshot_with_n_lessons_today((t0 + timedelta(hours=h)).date(), n=2)
+        with patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snap,
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+        intervals.append(coordinator.update_interval)
+
+    distinct_minutes = {round(i.total_seconds() / 60) for i in intervals if i is not None}
+    assert len(distinct_minutes) >= 5, (
+        f"Expected ≥5 distinct cadences across 24h; got {sorted(distinct_minutes)}"
+    )
+
+
+async def test_168h_synthetic_week_tz_matrix_zero_events_during_quiet_hours(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """V-17 (+ V-15 matrix): zero events fired between 22h and 6h NC across a synthetic week.
+
+    The atomic gate at top of _fire_diff_events must suppress all events when
+    `should_fire_event(now, options)` returns False.
+    """
+    from datetime import datetime, time, timedelta
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api.models import Lesson, Snapshot
+    from custom_components.ha_pronote.const import (
+        EVENT_NEW_GRADE,
+        EVENT_NEW_INFORMATION,
+        EVENT_SCHEDULE_CHANGED,
+    )
+
+    tz = ZoneInfo("Pacific/Noumea")
+    monday = datetime(2026, 5, 11, 0, 0, tzinfo=tz)  # Monday midnight
+    freezer.move_to(monday)
+    today = monday.date()
+    snap0 = snapshot_with_n_lessons_today(today, n=1)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snap0, today
+    )
+
+    events_at_quiet_hours = []
+
+    def _record(event):
+        now_local = datetime.now(tz=tz)
+        events_at_quiet_hours.append((now_local, event))
+
+    hass.bus.async_listen(EVENT_SCHEDULE_CHANGED, _record)
+    hass.bus.async_listen(EVENT_NEW_GRADE, _record)
+    hass.bus.async_listen(EVENT_NEW_INFORMATION, _record)
+
+    # Walk through a synthetic week sampling every 2 hours at quiet vs not-quiet
+    # times. Build a diff-producing snapshot pair at each step (a cancelled lesson
+    # appears, then disappears, alternating).
+    for hour_offset in range(0, 168, 2):
+        ts = monday + timedelta(hours=hour_offset)
+        freezer.move_to(ts)
+        t_local = ts.astimezone(tz).time()
+        is_quiet = t_local >= time(22, 0) or t_local < time(6, 0)
+        d = ts.date()
+        start = datetime(d.year, d.month, d.day, 8, 0, tzinfo=tz)
+        end = datetime(d.year, d.month, d.day, 9, 0, tzinfo=tz)
+        # Alternate the cancellation status to force a diff each tick.
+        canceled = (hour_offset // 2) % 2 == 0
+        lesson = Lesson(
+            date=d, start=start, end=end, subject="S0",
+            teacher="Mme A", classroom="101",
+            canceled=canceled, status="Cours annulé" if canceled else "",
+        )
+        new_snap = Snapshot(today=d, school_tz="Pacific/Noumea", lessons=[lesson])
+        before = len(events_at_quiet_hours)
+        with patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=new_snap,
+        ):
+            try:
+                await coordinator._async_update_data()  # noqa: SLF001
+            except Exception:  # noqa: BLE001 — never abort the loop on a stub failure
+                pass
+        await hass.async_block_till_done()
+        delta_events = events_at_quiet_hours[before:]
+        if is_quiet:
+            assert delta_events == [], (
+                f"Quiet-hours event leak at {ts.isoformat()} (local {t_local}): {delta_events}"
+            )
+
+
+async def test_async_update_data_skip_executor_during_suspension(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """V-20: should_poll=False on Saturday morning -> executor NOT called, data unchanged."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.const import (
+        DEFAULT_SUSPENDED_CADENCE,
+        JITTER_SECONDS,
+    )
+
+    # First refresh on a Tuesday afternoon (school day) so self.data is populated
+    tuesday = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(tuesday)
+    today = tuesday.date()
+    initial_snapshot = snapshot_with_n_lessons_today(today, n=3)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, initial_snapshot, today
+    )
+    assert coordinator.data is initial_snapshot
+
+    # Now jump to Saturday morning — should_poll=False because is_school_day(Sat)=False
+    # and the primer window only fires Sun afternoon for Mon = school.
+    saturday = datetime(2026, 5, 16, 10, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(saturday)
+
+    fetch_mock = MagicMock(side_effect=AssertionError("fetch_all must NOT be called during suspension"))
+    with patch(
+        "custom_components.ha_pronote.coordinator.fetch_all",
+        fetch_mock,
+    ):
+        result = await coordinator._async_update_data()  # noqa: SLF001
+
+    assert fetch_mock.call_count == 0  # executor never called
+    assert result is initial_snapshot  # sensors keep cached values
+    assert coordinator.data is initial_snapshot
+    # update_interval is suspended cadence ± jitter
+    delta = coordinator.update_interval - DEFAULT_SUSPENDED_CADENCE
+    assert abs(delta.total_seconds()) <= JITTER_SECONDS + 5, (
+        f"update_interval {coordinator.update_interval} not within ±{JITTER_SECONDS}s of {DEFAULT_SUSPENDED_CADENCE}"
+    )
+
+
+async def test_notification_body_contains_next_retry_time_and_strike_count(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """V-21: notification body contains retry HH:MM, strike count, redacted err, kind anchor.
+
+    Force 1 IP_SUSPENDED strike, inspect the IP notification body.
+    Then trigger an auth_circuit notification and assert it contains the
+    `#troubleshooting-auth-circuit` anchor (BLOCKER-3 fix coverage for both kinds).
+    """
+    import re
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api import ErrorReason
+
+    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(t0)
+    today = t0.date()
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+    mock_persistent_notification.create.reset_mock()
+
+    # IP_SUSPENDED notification — include credential-looking text to verify redact()
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=RateLimitedError(
+                "Your IP is suspended; password=hunter2 token=abc123",
+                reason=ErrorReason.IP_SUSPENDED,
+            ),
+        ),
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    assert mock_persistent_notification.create.call_count == 1
+    kwargs = mock_persistent_notification.create.call_args.kwargs
+    message = kwargs["message"]
+    # HH:MM retry timestamp
+    assert re.search(r"\d{2}:\d{2}", message), f"No HH:MM in message: {message}"
+    # Strike count #1 or N°1 (language-dependent)
+    assert "#1" in message or "N°1" in message, f"No strike count in message: {message}"
+    # Redaction applied — no raw credential patterns
+    assert "password=hunter2" not in message
+    assert "token=abc123" not in message
+    assert "<redacted>" in message
+    # BLOCKER-3: ip_suspended kind anchor
+    assert "#troubleshooting-ip-suspended" in message, f"Missing ip-suspended anchor: {message}"
+
+    # Now trigger an auth_circuit notification to verify the auth-circuit anchor
+    fresh_client = MagicMock()
+    fresh_client.set_child = MagicMock()
+    fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
+    mock_persistent_notification.create.reset_mock()
+    # Need to clear backoff to allow the auth path to run
+    coordinator._backoff_until = None  # noqa: SLF001
+    coordinator._last_recovery_at = None  # noqa: SLF001
+
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=[
+                AuthError("session expired"),
+                AuthError("retry fail"),
+            ],
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ),
+        pytest.raises(ConfigEntryAuthFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    assert mock_persistent_notification.create.call_count == 1
+    auth_kwargs = mock_persistent_notification.create.call_args.kwargs
+    assert "#troubleshooting-auth-circuit" in auth_kwargs["message"], (
+        f"Missing auth-circuit anchor: {auth_kwargs['message']}"
+    )
+
+
+async def test_first_poll_on_weekend_still_fetches(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """D-10 first-poll invariant: weekend install -> first poll fetches because self.data is None."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    saturday = datetime(2026, 5, 16, 10, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(saturday)
+    today = saturday.date()
+    snap = snapshot_with_n_lessons_today(today, n=2)
+
+    mock_config_entry.add_to_hass(hass)
+    fetch_spy = MagicMock(return_value=snap)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            fetch_spy,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    # async_config_entry_first_refresh runs once during async_setup_entry.
+    # On Saturday, self.data is None initially -> the suspension short-circuit
+    # at top of _async_update_data does NOT fire -> fetch_all IS called.
+    assert fetch_spy.call_count >= 1, "First poll on weekend MUST fetch (self.data was None)"
+
+
+async def test_quiet_hours_atomic_event_gate_suppresses_all_events(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """D-09 + Specifics memo: atomic gate suppresses every event in a quiet-hours poll.
+
+    Also verifies _previous_snapshot mutation still occurs (CR-03 ordering invariant)
+    even when the gate suppresses events — the next non-quiet poll will diff against
+    the freshly-mutated baseline.
+    """
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api.models import Grade, Information, Lesson, Snapshot
+    from custom_components.ha_pronote.const import (
+        EVENT_NEW_GRADE,
+        EVENT_NEW_INFORMATION,
+        EVENT_SCHEDULE_CHANGED,
+    )
+
+    tz = ZoneInfo("Pacific/Noumea")
+    # First refresh on a non-quiet time (Tue 14h) so self.data is populated
+    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=tz)
+    freezer.move_to(t0)
+    today = t0.date()
+    snap1_lessons = [
+        Lesson(
+            date=today,
+            start=datetime(today.year, today.month, today.day, 8, 0, tzinfo=tz),
+            end=datetime(today.year, today.month, today.day, 9, 0, tzinfo=tz),
+            subject="S0", teacher="Mme A", classroom="101",
+            canceled=False, status="",
+        )
+    ]
+    snap1 = Snapshot(today=today, school_tz="Pacific/Noumea", lessons=snap1_lessons)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snap1, today
+    )
+
+    # Jump to quiet hours (Tue 23h00 -> still Tue date in NC)
+    t_quiet = datetime(2026, 5, 12, 23, 0, tzinfo=tz)
+    freezer.move_to(t_quiet)
+
+    events_fired: list = []
+    hass.bus.async_listen(EVENT_SCHEDULE_CHANGED, lambda e: events_fired.append(e))
+    hass.bus.async_listen(EVENT_NEW_GRADE, lambda e: events_fired.append(e))
+    hass.bus.async_listen(EVENT_NEW_INFORMATION, lambda e: events_fired.append(e))
+
+    # Build a diff-producing snapshot: cancelled lesson + new grade + new info
+    cancelled = Lesson(
+        date=today,
+        start=datetime(today.year, today.month, today.day, 8, 0, tzinfo=tz),
+        end=datetime(today.year, today.month, today.day, 9, 0, tzinfo=tz),
+        subject="S0", teacher="Mme A", classroom="101",
+        canceled=True, status="Cours annulé",
+    )
+    grade = Grade(subject="Math", value="16", out_of="20", coefficient="1", date=today)
+    info = Information(
+        info_id="info-001", title="Réunion", sender="Direction",
+        date=datetime(today.year, today.month, today.day, 12, 0, tzinfo=tz),
+        excerpt="Détails.", read=False,
+    )
+    snap2 = Snapshot(
+        today=today, school_tz="Pacific/Noumea",
+        lessons=[cancelled], grades=[grade], information=[info],
+    )
+
+    with patch(
+        "custom_components.ha_pronote.coordinator.fetch_all",
+        return_value=snap2,
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+    await hass.async_block_till_done()
+
+    # Atomic gate suppressed ALL events — none fired.
+    assert events_fired == [], f"Atomic gate failed — events leaked at quiet hours: {events_fired}"
+
+    # CR-03 ordering invariant: _previous_snapshot IS updated even with gate active
+    assert coordinator._previous_snapshot is snap2  # noqa: SLF001
+
+
+async def test_rate_limited_non_ip_suspended_does_not_tick_breaker(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """D-13 negative: RateLimitedError with non-IP_SUSPENDED reason does NOT tick breaker."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from custom_components.ha_pronote.api import ErrorReason
+
+    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(t0)
+    today = t0.date()
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+    mock_persistent_notification.create.reset_mock()
+
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=RateLimitedError(
+                "transient blip", reason=ErrorReason.RATE_LIMITED
+            ),
+        ),
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    assert coordinator._consecutive_failures == 0  # noqa: SLF001
+    assert coordinator._backoff_until is None  # noqa: SLF001
+    assert mock_persistent_notification.create.call_count == 0
+
+
+async def test_communication_error_does_not_tick_breaker(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """D-13 negative: CommunicationError does NOT tick breaker (transient network blip)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(t0)
+    today = t0.date()
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+    mock_persistent_notification.create.reset_mock()
+
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=CommunicationError("network down"),
+        ),
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    assert coordinator._consecutive_failures == 0  # noqa: SLF001
+    assert coordinator._backoff_until is None  # noqa: SLF001
+    assert mock_persistent_notification.create.call_count == 0
+
+
+async def test_wr04_aliased_auth_error_does_not_tick_breaker(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    mock_persistent_notification,
+    snapshot_with_n_lessons_today,
+    freezer,
+) -> None:
+    """WR-04 interaction: a SECOND AuthError within the 5-minute WR-04 cooldown
+    is absorbed by the cooldown gate (UpdateFailed raised BEFORE entering
+    _recover_from_auth_error) -> _handle_failure NOT called -> counter stays
+    at 1 (from the first AuthError pair that did go through recovery)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
+    freezer.move_to(t0)
+    today = t0.date()
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+    mock_persistent_notification.create.reset_mock()
+
+    fresh_client = MagicMock()
+    fresh_client.set_child = MagicMock()
+    fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
+
+    # Strike 1: AuthError + retry-AuthError -> _handle_failure ticks counter to 1
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=[
+                AuthError("aliased rate-limit"),
+                AuthError("recovery fail"),
+            ],
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ),
+        pytest.raises(ConfigEntryAuthFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    assert coordinator._consecutive_failures == 1  # noqa: SLF001
+    # Need to clear backoff for the next call (which we want to enter the auth path)
+    coordinator._backoff_until = None  # noqa: SLF001
+
+    # Strike 2 within the 5-min cooldown — advance by only 1 minute.
+    # The WR-04 cooldown short-circuit at coordinator.py raises UpdateFailed
+    # WITHOUT entering _recover_from_auth_error, so _handle_failure is NOT called.
+    freezer.move_to(t0 + timedelta(minutes=1))
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=AuthError("still aliased"),
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ),
+        pytest.raises(UpdateFailed),
+    ):
+        await coordinator._async_update_data()  # noqa: SLF001
+
+    # Counter stayed at 1 (not 2) — WR-04 cooldown swallowed the aliased loop.
+    assert coordinator._consecutive_failures == 1  # noqa: SLF001
