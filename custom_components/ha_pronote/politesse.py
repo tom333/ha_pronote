@@ -74,6 +74,10 @@ class PolitesseOptions:
     vacation_ranges: tuple[tuple[date, date], ...]  # default const.NC_VACATION_RANGES_2026
     holiday_dates: frozenset[date]  # injected per-entry by coordinator
     jitter_seconds: int  # default 30
+    # Phase 6 D-09 / OPT-02 — adaptive polling toggle. When False, compute_interval
+    # short-circuits to refresh_interval ± jitter without entering quiet/suspended/
+    # afternoon branches. Default True preserves Phase 5 behavior exactly.
+    adaptive_enabled: bool = True
 
 
 def is_school_day(
@@ -312,6 +316,15 @@ def compute_interval(
     """
     if now.tzinfo is None:
         raise ValueError("now must be tz-aware")
+
+    # Phase 6 D-09 / OPT-02 — short-circuit when the user disabled adaptive polling.
+    # Bypass the quiet / suspended / afternoon branches; always return
+    # refresh_interval + jitter, clamped to >= 1 min (matches the tail clamp).
+    if not options.adaptive_enabled:
+        jittered = options.refresh_interval + timedelta(
+            seconds=rng.uniform(-options.jitter_seconds, options.jitter_seconds)
+        )
+        return max(jittered, timedelta(minutes=1))
 
     # Branch 1 — quiet hours win over everything else (Sat 23h is quiet, not
     # suspended; D-04 ordering verified in TestComputeInterval/quiet-overlaps-weekend).
