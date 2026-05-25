@@ -2,52 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime as _datetime
+from datetime import date, timedelta
 import time
 from unittest.mock import MagicMock, patch
-from zoneinfo import ZoneInfo as _ZoneInfo
 
 import pytest
 
 from custom_components.ha_pronote.api import AuthError, CommunicationError, RateLimitedError
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
-
-
-# ---------------------------------------------------------------------------
-# Phase 5 Plan 05-04 — Gap closure: pin dt_util.now() to a clean NC school day
-# ---------------------------------------------------------------------------
-#
-# Plan 05-03 added two short-circuits at the top of coordinator._async_update_data
-# (lines 154-169) that return self.data without fetching when:
-#   - self._backoff_until > now (backoff active), OR
-#   - should_poll(now, options) == False (weekend / vacation / NC férié)
-#
-# If real-clock now() happens to be in any of those classes (e.g. running tests
-# on a Saturday, during NC vacation, or on a férié like Pentecôte 2026-05-25),
-# the existing Phase 3/4-era tests that drive _async_update_data() directly
-# (without mocking time) hit the short-circuit and never reach their expected
-# fetch-and-fail / fetch-and-emit paths.
-#
-# Fix: autouse module-level freezegun fixture pinning every test in this file
-# to Thursday 2026-05-07 14:00 NC — a verified clean school day where
-# should_poll == True, is_afternoon_window == False (14:00 < 17:00), and
-# is_quiet_hours == False (14:00 ∉ [22:00, 06:00)).
-#
-# Tests that need their own clock (the three breaker tests at lines 895/980/1025
-# and the 24h synthetic-clock test at line 1081) use ``freezer`` as an explicit
-# parameter; they override the module pin by calling ``freezer.move_to(...)`` at
-# the top of the test body. This pattern is compatible with the autouse fixture
-# because freezegun's move_to mutates the SAME freezer instance.
-@pytest.fixture(autouse=True)
-def _frozen_school_day(freezer):
-    """Pin dt_util.now() to Thu 2026-05-07 14:00 Pacific/Noumea for every test in this module.
-
-    Phase 5 Plan 05-04 gap closure. Tests that need their own clock simply call
-    ``freezer.move_to(...)`` at the top of the test body — that overrides this pin.
-    """
-    freezer.move_to(_datetime(2026, 5, 7, 14, 0, 0, tzinfo=_ZoneInfo("Pacific/Noumea")))
-    return freezer
 
 
 async def test_first_refresh_writes_session_to_entry_data(
@@ -238,7 +201,7 @@ async def test_update_interval_is_30_minutes(
     mock_pronote_client,
     snapshot_with_n_lessons_today,
 ) -> None:
-    """D-04 (Phase 5): base cadence is refresh_interval (30 min) + ±JITTER_SECONDS jitter on a school day at 14:00 NC."""
+    """D-24: hardcoded 30-min cadence; Phase 5 makes it adaptive."""
     today = date(2026, 5, 7)
     mock_config_entry.add_to_hass(hass)
     with (
@@ -254,18 +217,7 @@ async def test_update_interval_is_30_minutes(
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
     coordinator = mock_config_entry.runtime_data.coordinator
-    # Phase 5 D-04: compute_interval applies ±JITTER_SECONDS jitter to every cadence.
-    # The base case (weekday afternoon < 17:00, not quiet, not suspended) is
-    # refresh_interval (30 min) + uniform(-30, +30) seconds. Assert the envelope; the
-    # jitter distribution itself is asserted separately by V-12/V-13 in test_politesse.py.
-    from custom_components.ha_pronote.const import JITTER_SECONDS
-
-    actual_seconds = coordinator.update_interval.total_seconds()
-    assert abs(actual_seconds - 1800) <= JITTER_SECONDS + 5, (
-        f"Phase 5 D-04: update_interval={coordinator.update_interval} not within "
-        f"±{JITTER_SECONDS + 5}s of 1800s (base 30min + jitter). "
-        f"Actual deviation: {abs(actual_seconds - 1800):.1f}s"
-    )
+    assert coordinator.update_interval == timedelta(minutes=30)
 
 
 async def test_previous_snapshot_populated_after_first_refresh(
@@ -740,10 +692,10 @@ async def test_fires_schedule_changed_on_lesson_diff(
 
     assert len(events_fired) >= 1, f"Expected pronote_schedule_changed event, got: {events_fired}"
     payload = events_fired[0].data
-    assert payload["child_id"] == "jean_dupont"  # D-11 — slug from entry.data["child_identifier"]
+    assert payload["child_id"] == "jean_dupont"    # D-11 — slug from entry.data["child_identifier"]
     assert payload["child_name"] == "Jean Dupont"  # D-11 — display name
-    assert "config_entry_id" in payload  # D-11 — multi-child filter key
-    assert payload["change_type"] == "canceled"  # diff_lessons classification
+    assert "config_entry_id" in payload            # D-11 — multi-child filter key
+    assert payload["change_type"] == "canceled"    # diff_lessons classification
     assert payload["day"] == "today"
 
 
@@ -893,23 +845,14 @@ async def test_event_payload_contains_child_context(
     start = datetime(today.year, today.month, today.day, 8, 0, tzinfo=tz)
     end = datetime(today.year, today.month, today.day, 9, 0, tzinfo=tz)
     cancelled = Lesson(
-        date=today,
-        start=start,
-        end=end,
-        subject="S0",
-        teacher="Mme A",
-        classroom="101",
-        canceled=True,
-        status="Cours annulé",
+        date=today, start=start, end=end, subject="S0",
+        teacher="Mme A", classroom="101", canceled=True, status="Cours annulé",
     )
     grade = Grade(subject="Physique", value="12", out_of="20", coefficient="1", date=today)
     info = Information(
-        info_id="info-002",
-        title="Test",
-        sender="Prof",
+        info_id="info-002", title="Test", sender="Prof",
         date=datetime(2026, 5, 10, 10, 0, tzinfo=tz),
-        excerpt="Résumé.",
-        read=False,
+        excerpt="Résumé.", read=False,
     )
     # snap1 had a non-cancelled lesson for "S0" — we need it to exist in snap1 for the diff
     snap1_with_lesson = Snapshot(
@@ -917,14 +860,8 @@ async def test_event_payload_contains_child_context(
         school_tz="Pacific/Noumea",
         lessons=[
             Lesson(
-                date=today,
-                start=start,
-                end=end,
-                subject="S0",
-                teacher="Mme A",
-                classroom="101",
-                canceled=False,
-                status="",
+                date=today, start=start, end=end, subject="S0",
+                teacher="Mme A", classroom="101", canceled=False, status="",
             )
         ],
     )
@@ -943,7 +880,7 @@ async def test_event_payload_contains_child_context(
         assert "child_id" in payload, f"Missing child_id in {payload}"
         assert "child_name" in payload, f"Missing child_name in {payload}"
         assert "config_entry_id" in payload, f"Missing config_entry_id in {payload}"
-        assert payload["child_id"] == "jean_dupont"  # D-11 slug
+        assert payload["child_id"] == "jean_dupont"   # D-11 slug
         assert payload["child_name"] == "Jean Dupont"  # D-11 display name
 
 
@@ -980,7 +917,9 @@ async def test_3_consecutive_auth_failures_set_backoff_4h_and_notification(
     today = t0.date()
     snapshot = snapshot_with_n_lessons_today(today, n=2)
 
-    coordinator = await _setup_coordinator(hass, mock_config_entry, mock_pronote_client, snapshot, today)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot, today
+    )
 
     fresh_client = MagicMock()
     fresh_client.set_child = MagicMock()
@@ -1020,7 +959,6 @@ async def test_3_consecutive_auth_failures_set_backoff_4h_and_notification(
 
     # 3rd strike -> BACKOFF_SCHEDULE[2] = 4h (within jitter slack)
     from custom_components.ha_pronote.coordinator import dt_util as coord_dt_util
-
     now_school = coord_dt_util.now(coordinator._school_tz)  # noqa: SLF001
     delta = coordinator._backoff_until - now_school  # noqa: SLF001
     expected = BACKOFF_SCHEDULE[2]
@@ -1066,7 +1004,9 @@ async def test_ip_suspended_triggers_backoff_and_notification(
     with (
         patch(
             "custom_components.ha_pronote.coordinator.fetch_all",
-            side_effect=RateLimitedError("Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED),
+            side_effect=RateLimitedError(
+                "Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED
+            ),
         ),
         pytest.raises(UpdateFailed),
     ):
@@ -1110,7 +1050,9 @@ async def test_recovery_resets_breaker_and_dismisses_notification(
     with (
         patch(
             "custom_components.ha_pronote.coordinator.fetch_all",
-            side_effect=RateLimitedError("Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED),
+            side_effect=RateLimitedError(
+                "Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED
+            ),
         ),
         pytest.raises(UpdateFailed),
     ):
@@ -1177,7 +1119,9 @@ async def test_24h_synthetic_clock_tz_matrix_produces_at_least_5_distinct_interv
     # only 4 branches (quiet_cadence, suspended_cadence, afternoon_interval,
     # refresh_interval) and the chosen 7-timestamp set produces 3 distinct values
     # (refresh, afternoon, quiet). Threshold lowered to 3 to match reality.
-    assert len(distinct_minutes) >= 3, f"Expected ≥3 distinct cadences across 24h; got {sorted(distinct_minutes)}"
+    assert len(distinct_minutes) >= 3, (
+        f"Expected ≥3 distinct cadences across 24h; got {sorted(distinct_minutes)}"
+    )
 
 
 async def test_168h_synthetic_week_tz_matrix_zero_events_during_quiet_hours(
@@ -1208,7 +1152,9 @@ async def test_168h_synthetic_week_tz_matrix_zero_events_during_quiet_hours(
     freezer.move_to(monday)
     today = monday.date()
     snap0 = snapshot_with_n_lessons_today(today, n=1)
-    coordinator = await _setup_coordinator(hass, mock_config_entry, mock_pronote_client, snap0, today)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snap0, today
+    )
 
     events_at_quiet_hours = []
 
@@ -1238,14 +1184,9 @@ async def test_168h_synthetic_week_tz_matrix_zero_events_during_quiet_hours(
         # Alternate the cancellation status to force a diff each tick.
         canceled = (hour_offset // 2) % 2 == 0
         lesson = Lesson(
-            date=d,
-            start=start,
-            end=end,
-            subject="S0",
-            teacher="Mme A",
-            classroom="101",
-            canceled=canceled,
-            status="Cours annulé" if canceled else "",
+            date=d, start=start, end=end, subject="S0",
+            teacher="Mme A", classroom="101",
+            canceled=canceled, status="Cours annulé" if canceled else "",
         )
         new_snap = Snapshot(today=d, school_tz="Pacific/Noumea", lessons=[lesson])
         before = len(events_at_quiet_hours)
@@ -1260,7 +1201,9 @@ async def test_168h_synthetic_week_tz_matrix_zero_events_during_quiet_hours(
         await hass.async_block_till_done()
         delta_events = events_at_quiet_hours[before:]
         if is_quiet:
-            assert delta_events == [], f"Quiet-hours event leak at {ts.isoformat()} (local {t_local}): {delta_events}"
+            assert delta_events == [], (
+                f"Quiet-hours event leak at {ts.isoformat()} (local {t_local}): {delta_events}"
+            )
 
 
 async def test_async_update_data_skip_executor_during_suspension(
@@ -1285,7 +1228,9 @@ async def test_async_update_data_skip_executor_during_suspension(
     freezer.move_to(tuesday)
     today = tuesday.date()
     initial_snapshot = snapshot_with_n_lessons_today(today, n=3)
-    coordinator = await _setup_coordinator(hass, mock_config_entry, mock_pronote_client, initial_snapshot, today)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, initial_snapshot, today
+    )
     assert coordinator.data is initial_snapshot
 
     # Now jump to Saturday morning — should_poll=False because is_school_day(Sat)=False
@@ -1469,15 +1414,14 @@ async def test_quiet_hours_atomic_event_gate_suppresses_all_events(
             date=today,
             start=datetime(today.year, today.month, today.day, 8, 0, tzinfo=tz),
             end=datetime(today.year, today.month, today.day, 9, 0, tzinfo=tz),
-            subject="S0",
-            teacher="Mme A",
-            classroom="101",
-            canceled=False,
-            status="",
+            subject="S0", teacher="Mme A", classroom="101",
+            canceled=False, status="",
         )
     ]
     snap1 = Snapshot(today=today, school_tz="Pacific/Noumea", lessons=snap1_lessons)
-    coordinator = await _setup_coordinator(hass, mock_config_entry, mock_pronote_client, snap1, today)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snap1, today
+    )
 
     # Jump to quiet hours (Tue 23h00 -> still Tue date in NC)
     t_quiet = datetime(2026, 5, 12, 23, 0, tzinfo=tz)
@@ -1493,27 +1437,18 @@ async def test_quiet_hours_atomic_event_gate_suppresses_all_events(
         date=today,
         start=datetime(today.year, today.month, today.day, 8, 0, tzinfo=tz),
         end=datetime(today.year, today.month, today.day, 9, 0, tzinfo=tz),
-        subject="S0",
-        teacher="Mme A",
-        classroom="101",
-        canceled=True,
-        status="Cours annulé",
+        subject="S0", teacher="Mme A", classroom="101",
+        canceled=True, status="Cours annulé",
     )
     grade = Grade(subject="Math", value="16", out_of="20", coefficient="1", date=today)
     info = Information(
-        info_id="info-001",
-        title="Réunion",
-        sender="Direction",
+        info_id="info-001", title="Réunion", sender="Direction",
         date=datetime(today.year, today.month, today.day, 12, 0, tzinfo=tz),
-        excerpt="Détails.",
-        read=False,
+        excerpt="Détails.", read=False,
     )
     snap2 = Snapshot(
-        today=today,
-        school_tz="Pacific/Noumea",
-        lessons=[cancelled],
-        grades=[grade],
-        information=[info],
+        today=today, school_tz="Pacific/Noumea",
+        lessons=[cancelled], grades=[grade], information=[info],
     )
 
     with patch(
@@ -1555,7 +1490,9 @@ async def test_rate_limited_non_ip_suspended_does_not_tick_breaker(
     with (
         patch(
             "custom_components.ha_pronote.coordinator.fetch_all",
-            side_effect=RateLimitedError("transient blip", reason=ErrorReason.RATE_LIMITED),
+            side_effect=RateLimitedError(
+                "transient blip", reason=ErrorReason.RATE_LIMITED
+            ),
         ),
         pytest.raises(UpdateFailed),
     ):
