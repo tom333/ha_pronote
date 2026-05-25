@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, time, timedelta
 from typing import Final
 
 from homeassistant.const import Platform
@@ -27,9 +27,9 @@ PLATFORMS: Final = (Platform.SENSOR, Platform.CALENDAR)
 # class level attribute (D-19, ENT-01), attribute caps (D-05, D-04),
 # platform extension (D-10).
 
-EVENT_SCHEDULE_CHANGED: Final = "pronote_schedule_changed"   # D-13, EVENT-01
-EVENT_NEW_GRADE: Final = "pronote_new_grade"                 # D-13, EVENT-02
-EVENT_NEW_INFORMATION: Final = "pronote_new_information"     # D-13, EVENT-03
+EVENT_SCHEDULE_CHANGED: Final = "pronote_schedule_changed"  # D-13, EVENT-01
+EVENT_NEW_GRADE: Final = "pronote_new_grade"  # D-13, EVENT-02
+EVENT_NEW_INFORMATION: Final = "pronote_new_information"  # D-13, EVENT-03
 
 # Probe-locked class level attribute on pronotepy.ClientInfo (D-19, ENT-01).
 # PHASE-4-PROBE-NOTES.md STEP 11 confirms: ClientInfo.class_name returns
@@ -38,7 +38,7 @@ EVENT_NEW_INFORMATION: Final = "pronote_new_information"     # D-13, EVENT-03
 # the child's class lives in client.children[child_index].class_name.
 CLASS_LEVEL_ATTR: Final = "class_name"
 
-NOTIFICATIONS_WINDOW: Final = 20    # D-05 — cap on informations list in sensor attrs
+NOTIFICATIONS_WINDOW: Final = 20  # D-05 — cap on informations list in sensor attrs
 GRADE_COMMENT_MAX_LEN: Final = 200  # D-04 — comment truncation length at sensor render
 # D-04 (revised post-UAT): CONTEXT.md called for "all current-period grades",
 # but the heavy-class CI gate (D-17 + 100 grades fixture) measured the JSON
@@ -47,3 +47,41 @@ GRADE_COMMENT_MAX_LEN: Final = 200  # D-04 — comment truncation length at sens
 # ApexCharts schema fits comfortably. Realistic trimester counts (~30–60)
 # remain fully covered; only the synthetic 100-grade stress case is trimmed.
 GRADES_WINDOW: Final = 50
+
+# Phase 5 additions — adaptive polling cadence, quiet hours, circuit breaker.
+# D-04: compute_interval branch defaults. D-08: quiet hours default 22h-6h NC.
+# D-11: backoff curve per PITFALLS §2.1. D-18: const wording locked in CONTEXT.md.
+# BLOCKER-3 (checker revision): TROUBLESHOOTING_DOC_URL_BASE consolidates the
+# troubleshooting URL into ONE symbol; coordinator._format_notification builds
+# kind-specific anchors as f"{BASE}#troubleshooting-{kind}" matching D-15's
+# anchor wording (#troubleshooting-ip-suspended / #troubleshooting-auth-circuit).
+# Phase 7 DIST-07 fills the <placeholder-owner> in this one const, not many call sites.
+
+BACKOFF_SCHEDULE: Final[tuple[timedelta, ...]] = (
+    timedelta(hours=1),
+    timedelta(hours=2),
+    timedelta(hours=4),
+    timedelta(hours=12),
+    timedelta(hours=24),
+)
+JITTER_SECONDS: Final = 30
+DEFAULT_AFTERNOON_INTERVAL: Final = timedelta(minutes=15)
+DEFAULT_AFTERNOON_WINDOW: Final = (time(17, 0), time(20, 0))
+DEFAULT_QUIET_HOURS: Final = (time(22, 0), time(6, 0))
+DEFAULT_SUSPENDED_CADENCE: Final = timedelta(hours=6)
+DEFAULT_QUIET_CADENCE: Final = timedelta(hours=4)
+NC_VACATION_RANGES_2026: Final[tuple[tuple[date, date], ...]] = (
+    (date(2026, 4, 4), date(2026, 4, 19)),
+    (date(2026, 6, 6), date(2026, 6, 21)),
+    (date(2026, 8, 8), date(2026, 8, 23)),
+    (date(2026, 10, 10), date(2026, 10, 25)),
+    (date(2026, 12, 19), date(2027, 2, 14)),
+)
+NC_LOCAL_HOLIDAYS_SUPPLEMENT: Final[frozenset[date]] = frozenset()
+IP_SUSPENDED_NOTIFICATION_ID_SUFFIX: Final = "ip_suspended"
+AUTH_CIRCUIT_NOTIFICATION_ID_SUFFIX: Final = "auth_circuit"
+# BLOCKER-3 fix: single-source base URL. Phase 7 DIST-07 fills the owner
+# placeholder in this ONE const. coordinator._format_notification builds
+# f"{TROUBLESHOOTING_DOC_URL_BASE}#troubleshooting-{kind}" where
+# kind in {"ip-suspended", "auth-circuit"} (hyphen-form per D-15).
+TROUBLESHOOTING_DOC_URL_BASE: Final = "https://github.com/<placeholder-owner>/ha_pronote"
