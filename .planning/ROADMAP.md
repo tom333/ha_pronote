@@ -162,8 +162,8 @@ Plans:
 Plans:
 
 **Wave 1** *(parallel — pure foundations + read paths, no file overlap)*
-- [ ] 06-01-PLAN.md — const.py (DEFAULT_ADAPTIVE_POLLING_ENABLED, NICKNAME_MAX_LEN) + politesse.py (PolitesseOptions.adaptive_enabled + compute_interval short-circuit) + tests/test_politesse_tz_matrix.py (Wave 1, OPT-02 + OPT-03 + OPT-04)
-- [ ] 06-02-PLAN.md — coordinator._resolve_options (adaptive_polling_enabled read) + __init__.async_setup_entry (school_tz override via entry.options + ZoneInfo validation) + entity.device_info (nickname fallback) + tests (Wave 1, COORD-03 + OPT-03 + OPT-04)
+- [x] 06-01-PLAN.md — const.py (DEFAULT_ADAPTIVE_POLLING_ENABLED, NICKNAME_MAX_LEN) + politesse.py (PolitesseOptions.adaptive_enabled + compute_interval short-circuit) + tests/test_politesse_tz_matrix.py (Wave 1, OPT-02 + OPT-03 + OPT-04)
+- [x] 06-02-PLAN.md — coordinator._resolve_options (adaptive_polling_enabled read) + __init__.async_setup_entry (school_tz override via entry.options + ZoneInfo validation) + entity.device_info (nickname fallback) + tests (Wave 1, COORD-03 + OPT-03 + OPT-04)
 
 **Wave 2** *(blocked on Wave 1 — config_flow.py reauth surface)*
 - [ ] 06-03-PLAN.md — Reauth flow (D-01..D-04): async_step_reauth + async_step_reauth_confirm + _REAUTH_SCHEMA + i18n keys (EN + FR) + 5 tests (Wave 2, AUTH-05)
