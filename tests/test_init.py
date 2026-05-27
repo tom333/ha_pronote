@@ -108,3 +108,92 @@ async def test_unload_entry_shuts_down_coordinator(hass, mock_config_entry, mock
         assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
         await hass.async_block_till_done()
         assert mock_shutdown.await_count + mock_shutdown.call_count >= 1
+
+
+# Phase 6 — OPT-04 / D-09: school_tz override via entry.options. The OptionsFlow
+# (Plan 06-05) validates the IANA string at submit-time. The __init__ read path
+# does NOT wrap exceptions — per user feedback memory feedback_no_silent_exceptions.md,
+# ZoneInfoNotFoundError propagates raw.
+
+async def test_async_setup_entry_school_tz_override_takes_effect(
+    hass, mock_pronote_client
+) -> None:
+    """OPT-04 / D-09 — entry.options['school_tz']='Europe/Paris' reaches the coordinator."""
+    from zoneinfo import ZoneInfo
+
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.ha_pronote.const import DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data={
+            "url": "https://example.com/pronote/eleve.html",
+            "account_type": "eleve",
+            "username": "alice",
+            "password": "p",
+            "session": None,
+            "child_identifier": "jean_dupont",
+            "child_index": None,
+            "child_name": "Jean Dupont",
+        },
+        options={"school_tz": "Europe/Paris"},
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.runtime_data.school_tz == ZoneInfo("Europe/Paris")
+
+
+async def test_async_setup_entry_school_tz_invalid_raises_zoneinfo_error(
+    hass, mock_pronote_client
+) -> None:
+    """OPT-04 — corrupted school_tz: ZoneInfoNotFoundError propagates RAW.
+
+    Per user feedback memory feedback_no_silent_exceptions.md, we do NOT wrap
+    the zoneinfo error into ConfigEntryNotReady. HA catches the raw exception
+    internally, logs the traceback, and transitions the entry to SETUP_ERROR.
+    """
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.ha_pronote.const import DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data={
+            "url": "https://example.com/pronote/eleve.html",
+            "account_type": "eleve",
+            "username": "alice",
+            "password": "p",
+            "session": None,
+            "child_identifier": "jean_dupont",
+            "child_index": None,
+            "child_name": "Jean Dupont",
+        },
+        options={"school_tz": "NotARealZone"},
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        # HA catches ZoneInfoNotFoundError internally when async_setup runs the
+        # coroutine; the public surface is entry.state.
+        result = await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    # Setup must NOT succeed (no silent fallback).
+    # Per HA semantics, an uncaught exception in async_setup_entry → SETUP_ERROR
+    # (NOT SETUP_RETRY — that semantic is reserved for ConfigEntryNotReady,
+    # which we deliberately do NOT raise here).
+    assert entry.state.name == "SETUP_ERROR"
+    # The raw error must reference the bad zone name in the captured reason / log.
+    # entry.reason may be None depending on HA version; fall back to checking
+    # the exception type via the state machine.
+    if entry.reason is not None:
+        assert "NotARealZone" in entry.reason or "ZoneInfo" in entry.reason

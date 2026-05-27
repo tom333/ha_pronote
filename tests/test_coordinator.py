@@ -1677,3 +1677,70 @@ async def test_wr04_aliased_auth_error_does_not_tick_breaker(
 
     # Counter stayed at 1 (not 2) — WR-04 cooldown swallowed the aliased loop.
     assert coordinator._consecutive_failures == 1  # noqa: SLF001
+
+
+# Phase 6 — OPT-02 / D-09: adaptive_polling_enabled propagates from entry.options to
+# PolitesseOptions.adaptive_enabled. The compute_interval short-circuit (tested in
+# tests/test_politesse_tz_matrix.py) verifies the runtime effect; this test pins
+# the coordinator-side wiring.
+
+async def test_resolve_options_adaptive_disabled_propagates(
+    hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today
+) -> None:
+    """OPT-02 / D-09 — adaptive_polling_enabled=False reaches PolitesseOptions."""
+    from datetime import date
+    from unittest.mock import patch
+
+    mock_config_entry.add_to_hass(hass)
+    # Mutate options to disable adaptive polling.
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        options={**mock_config_entry.options, "adaptive_polling_enabled": False},
+    )
+    today = date(2026, 5, 7)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        coord = mock_config_entry.runtime_data.coordinator
+        options = coord._resolve_options()  # noqa: SLF001
+        assert options.adaptive_enabled is False
+
+
+async def test_resolve_options_adaptive_default_is_true(
+    hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today
+) -> None:
+    """OPT-02 / D-09 — missing adaptive_polling_enabled key defaults to True."""
+    from datetime import date
+    from unittest.mock import patch
+
+    mock_config_entry.add_to_hass(hass)
+    # Explicitly ensure the key is NOT present in options.
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        options={k: v for k, v in mock_config_entry.options.items() if k != "adaptive_polling_enabled"},
+    )
+    today = date(2026, 5, 7)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        coord = mock_config_entry.runtime_data.coordinator
+        options = coord._resolve_options()  # noqa: SLF001
+        assert options.adaptive_enabled is True

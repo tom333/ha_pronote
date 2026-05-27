@@ -4,8 +4,8 @@ milestone: v0.1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-05-25T09:23:57.006Z"
-last_activity: 2026-05-25 -- Phase 06 planning complete
+last_updated: "2026-05-25T20:02:23.355Z"
+last_activity: 2026-05-25 -- Phase 06 execution started
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** L'utilisateur reçoit une notification fiable et exploitable dès qu'un cours est annulé ou modifié pour le jour même ou le lendemain.
-**Current focus:** Phase 05 — Politesse — Adaptive Polling, Quiet Hours, Circuit Breaker
+**Current focus:** Phase 06 — Auth Lifecycle & Options
 
 ## Current Position
 
-Phase: 05 — COMPLETE
-Plan: 2 of 4
-Status: Ready to execute
-Last activity: 2026-05-25 -- Phase 06 planning complete
+Phase: 06 (Auth Lifecycle & Options) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 06
+Last activity: 2026-05-25 -- Phase 06 execution started
 
 Progress: [██████████] 100%
 
