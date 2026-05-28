@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
+import pronotepy
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -69,8 +70,15 @@ def mock_pronote_client():
 
 @pytest.fixture
 def mock_parent_client_two_children():
-    """A MagicMock for pronotepy.ParentClient with 2 children — D-02 pick_child path."""
+    """A MagicMock for pronotepy.ParentClient with 2 children — D-02 pick_child path.
+
+    `client.__class__ = pronotepy.ParentClient` makes `isinstance(client, pronotepy.ParentClient)`
+    return True so config_flow.async_step_user takes the parent branch (otherwise it
+    falls through to the eleve else-branch and `slugify(client.info.name)` crashes on
+    the auto-MagicMock).
+    """
     client = MagicMock()
+    client.__class__ = pronotepy.ParentClient
     child0 = MagicMock()
     child0.name = "Alice Dupont"
     child0.identifier = "a3b4c5"
@@ -188,9 +196,9 @@ def mock_pronote_client_with_grades(mock_pronote_client):
     mock_grade.out_of = "20"
     mock_grade.coefficient = "2"
     mock_grade.date = date(2026, 5, 10)
-    mock_grade.average = "13"   # pronotepy attr name -> maps to Grade.class_average
-    mock_grade.min = "8"        # pronotepy attr name -> maps to Grade.class_min
-    mock_grade.max = "18"       # pronotepy attr name -> maps to Grade.class_max
+    mock_grade.average = "13"  # pronotepy attr name -> maps to Grade.class_average
+    mock_grade.min = "8"  # pronotepy attr name -> maps to Grade.class_min
+    mock_grade.max = "18"  # pronotepy attr name -> maps to Grade.class_max
     mock_grade.comment = ""
     mock_pronote_client.current_period.grades = [mock_grade]
     return mock_pronote_client
@@ -223,12 +231,8 @@ def mock_persistent_notification(monkeypatch):
     # coordinator.py does `from homeassistant.components import persistent_notification`
     # and calls `persistent_notification.async_create(...)`, so the import-site patch
     # is what tests actually need; the source-module patch is defensive.
-    monkeypatch.setattr(
-        "homeassistant.components.persistent_notification.async_create", create_mock
-    )
-    monkeypatch.setattr(
-        "homeassistant.components.persistent_notification.async_dismiss", dismiss_mock
-    )
+    monkeypatch.setattr("homeassistant.components.persistent_notification.async_create", create_mock)
+    monkeypatch.setattr("homeassistant.components.persistent_notification.async_dismiss", dismiss_mock)
     monkeypatch.setattr(
         "custom_components.ha_pronote.coordinator.persistent_notification.async_create",
         create_mock,

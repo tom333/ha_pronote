@@ -12,6 +12,7 @@ import pytest
 from custom_components.ha_pronote.api import AuthError, CommunicationError, RateLimitedError
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util import dt as dt_util
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +473,17 @@ async def test_recovery_cooldown_skips_back_to_back_auth_errors(
     mock_pronote_client,
     snapshot_with_n_lessons_today,
 ) -> None:
-    """WR-04: a second AuthError within the cooldown window must NOT re-login."""
+    """WR-04: a second AuthError within the cooldown window must NOT re-login.
+
+    The cooldown gate fires when ``_last_recovery_at`` is set AND the next AuthError
+    arrives inside ``_SILENT_RECOVERY_COOLDOWN``. We seed ``_last_recovery_at`` directly
+    rather than driving a prior successful recovery — because WR-09 (covered by
+    test_successful_recovery_clears_cooldown below) explicitly clears the cooldown on
+    success, so a "first recovery succeeded → second AuthError" sequence is by-design
+    NOT a cooldown case. The cooldown gate's contract is: "we're inside a
+    not-yet-cleared 5-minute window from a prior recovery attempt that may have
+    aliased a rate-limit, do NOT re-login."
+    """
     today = date(2026, 5, 7)
     coordinator = await _setup_coordinator(
         hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
@@ -482,27 +493,13 @@ async def test_recovery_cooldown_skips_back_to_back_auth_errors(
     fresh_client.set_child = MagicMock()
     fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
 
-    # First recovery: AuthError on initial fetch -> recovery rebuilds client
-    # and the retry succeeds. _last_recovery_at is now set.
-    with (
-        patch(
-            "custom_components.ha_pronote.coordinator.fetch_all",
-            side_effect=[
-                AuthError("session expired"),
-                snapshot_with_n_lessons_today(today, n=2),
-            ],
-        ),
-        patch(
-            "custom_components.ha_pronote.coordinator.build_or_resume_client",
-            return_value=fresh_client,
-        ) as mock_build,
-    ):
-        await coordinator._async_update_data()  # noqa: SLF001
-        assert mock_build.call_count == 1
+    # Seed cooldown: a prior recovery just happened (or aliased) and has NOT been
+    # cleared by WR-09 — equivalent to "the previous recovery raised, leaving the
+    # cooldown timestamp in place."
+    coordinator._last_recovery_at = dt_util.utcnow()  # noqa: SLF001
 
-    # Second poll, also AuthError, within the 5-minute cooldown: recovery
-    # path MUST short-circuit to UpdateFailed without invoking
-    # build_or_resume_client a second time.
+    # This poll: AuthError arrives within the cooldown window. The recovery path
+    # MUST short-circuit to UpdateFailed without invoking build_or_resume_client.
     with (
         patch(
             "custom_components.ha_pronote.coordinator.fetch_all",
@@ -1683,6 +1680,7 @@ async def test_wr04_aliased_auth_error_does_not_tick_breaker(
 # PolitesseOptions.adaptive_enabled. The compute_interval short-circuit (tested in
 # tests/test_politesse_tz_matrix.py) verifies the runtime effect; this test pins
 # the coordinator-side wiring.
+
 
 async def test_resolve_options_adaptive_disabled_propagates(
     hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today

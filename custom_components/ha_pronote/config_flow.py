@@ -42,7 +42,31 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
 from .api import build_client, set_active_child
+from .api.errors import AuthError, CommunicationError, PronoteIntegrationError, RateLimitedError
 from .const import DOMAIN
+
+# D-04 typed-exception → form-error mapping (re-introduced after Phase 3 DEBUG MODE
+# per Phase 6 CONTEXT.md decision — reauth/reconfigure depend on this surface).
+_ERROR_KEY_BY_EXC: tuple[tuple[type[Exception], str], ...] = (
+    (AuthError, "invalid_auth"),
+    (RateLimitedError, "ip_suspended"),
+    (CommunicationError, "cannot_connect"),
+    (PronoteIntegrationError, "unknown"),
+)
+
+
+def _map_error(exc: Exception) -> str:
+    """Map a typed pronote integration error to the D-04 form-error key.
+
+    Returns ``"unknown"`` for any unrecognised exception. Order matters because
+    ``RateLimitedError`` subclasses ``PronoteIntegrationError`` etc. — the
+    sequence above places narrower types before the catch-all.
+    """
+    for exc_type, key in _ERROR_KEY_BY_EXC:
+        if isinstance(exc, exc_type):
+            return key
+    return "unknown"
+
 
 _USER_SCHEMA = vol.Schema(
     {
@@ -73,23 +97,28 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Single-step credential form per D-01.
 
-        DEBUG MODE: typed exception mapping (D-04: AuthError → invalid_auth, etc.)
-        is intentionally REMOVED so all exceptions propagate raw to HA's
-        framework. This surfaces the full traceback in `ha core logs` and a
-        500 in the UI instead of polite form-error labels. Re-introduce the
-        mapping once the underlying pronotepy 2.14.6 vs Pronote 2025.2.9
-        integration is stabilised.
+        D-04: typed exceptions from ``build_client`` are mapped to form-error
+        keys (``invalid_auth`` / ``ip_suspended`` / ``cannot_connect`` /
+        ``unknown``) and the form is re-shown. Phase 6 reauth/reconfigure flows
+        rely on this same mapping.
         """
         if user_input is not None:
-            client = await self.hass.async_add_executor_job(
-                partial(
-                    build_client,
-                    user_input["url"],
-                    user_input["account_type"],
-                    user_input["username"],
-                    user_input["password"],
+            try:
+                client = await self.hass.async_add_executor_job(
+                    partial(
+                        build_client,
+                        user_input["url"],
+                        user_input["account_type"],
+                        user_input["username"],
+                        user_input["password"],
+                    )
                 )
-            )
+            except PronoteIntegrationError as err:
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=_USER_SCHEMA,
+                    errors={"base": _map_error(err)},
+                )
             self._client = client
             self._user_input = user_input
             # D-01: parent with >1 children -> pick_child; otherwise create.
@@ -118,8 +147,12 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _create_entry(self, child_index: int | None) -> ConfigFlowResult:
         """Resolve child, derive identifier, set unique_id, create entry.
 
-        DEBUG MODE: every WR-06 typed catch removed — set_active_child,
-        export_credentials, and child access all propagate raw exceptions.
+        WR-06: typed pronote exceptions from ``set_active_child`` and
+        ``export_credentials`` map to the D-04 abort reason (``invalid_auth`` /
+        ``ip_suspended`` / ``cannot_connect`` / ``unknown``). A bare
+        ``RuntimeError`` from ``export_credentials`` (e.g. half-init client)
+        maps to ``cannot_connect`` — pronotepy occasionally leaks plain
+        exceptions on partial-init paths.
         """
         if self._client is None or self._user_input is None:
             return self.async_abort(reason="unknown")
@@ -128,7 +161,10 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
             if child_index is None:
                 # parent with exactly one child -- implicit pick.
                 child_index = 0
-            await self.hass.async_add_executor_job(set_active_child, self._client, child_index)
+            try:
+                await self.hass.async_add_executor_job(set_active_child, self._client, child_index)
+            except PronoteIntegrationError as err:
+                return self.async_abort(reason=_map_error(err))
             child = self._client.children[child_index]
             child_name = child.name
         else:
@@ -151,7 +187,16 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
         # D-06: capture export_credentials() at flow time so the first
         # async_setup_entry has a session to try. Plan 02's coordinator
         # writes a fresh session after every successful poll.
-        session = await self.hass.async_add_executor_job(self._client.export_credentials)
+        try:
+            session = await self.hass.async_add_executor_job(self._client.export_credentials)
+        except PronoteIntegrationError as err:
+            return self.async_abort(reason=_map_error(err))
+        except RuntimeError:
+            # pronotepy 2.14.6 occasionally raises a plain RuntimeError from a
+            # half-initialised client (e.g. mid-recovery race). Surface as
+            # cannot_connect so the user knows to retry rather than seeing an
+            # opaque "unknown" abort.
+            return self.async_abort(reason="cannot_connect")
 
         return self.async_create_entry(
             title=f"{child_name} ({self._user_input['account_type']})",

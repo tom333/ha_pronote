@@ -10,12 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-MANIFEST_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "custom_components"
-    / "ha_pronote"
-    / "manifest.json"
-)
+MANIFEST_PATH = Path(__file__).resolve().parent.parent / "custom_components" / "ha_pronote" / "manifest.json"
 
 
 def _load_manifest() -> dict:
@@ -45,13 +40,13 @@ def test_manifest_codeowners_is_tom333() -> None:
 
 
 def test_manifest_documentation_url() -> None:
-    """D-05: documentation URL points at the GitHub repo."""
-    assert _load_manifest()["documentation"] == "https://github.com/tom333/ha-pronote"
+    """D-05: documentation URL points at the GitHub repo (underscore — matches real repo path)."""
+    assert _load_manifest()["documentation"] == "https://github.com/tom333/ha_pronote"
 
 
 def test_manifest_issue_tracker_url() -> None:
-    """D-06: issue tracker URL points at GitHub Issues."""
-    assert _load_manifest()["issue_tracker"] == "https://github.com/tom333/ha-pronote/issues"
+    """D-06: issue tracker URL points at GitHub Issues (underscore — matches real repo path)."""
+    assert _load_manifest()["issue_tracker"] == "https://github.com/tom333/ha_pronote/issues"
 
 
 def test_manifest_iot_class_cloud_polling() -> None:
@@ -110,6 +105,4 @@ def test_manifest_no_unexpected_keys() -> None:
         "requirements",
         "version",
     }
-    assert set(manifest.keys()) == expected, (
-        f"Unexpected manifest keys: {set(manifest.keys()) ^ expected}"
-    )
+    assert set(manifest.keys()) == expected, f"Unexpected manifest keys: {set(manifest.keys()) ^ expected}"

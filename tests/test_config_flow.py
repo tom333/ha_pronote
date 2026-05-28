@@ -81,7 +81,10 @@ async def test_user_step_pick_child_creates_entry(hass, mock_parent_client_two_c
     assert result["type"] == "create_entry"
     assert result["data"]["child_index"] == 0
     assert result["data"]["child_identifier"] == "alice_dupont"  # slugify(child[0].name)
-    mock_parent_client_two_children.set_child.assert_called_with(0)
+    # set_active_child resolves an int index → client.children[index] before delegating
+    # to client.set_child (api/client.py:set_active_child). Assert the resolved Child
+    # object was passed, not the bare int index.
+    mock_parent_client_two_children.set_child.assert_called_once_with(mock_parent_client_two_children.children[0])
 
 
 @pytest.mark.parametrize(

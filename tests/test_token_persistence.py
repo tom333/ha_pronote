@@ -44,28 +44,44 @@ def _frozen_school_day(freezer):
 
 
 def test_build_or_resume_client_uses_token_login_when_session_present(monkeypatch):
-    """D-07 fast path — token_login first when session is non-None; passes device_name."""
+    """D-07 fast path — token_login first when session is non-None; passes device_name.
+
+    Production calls ``cls.token_login(device_name=device_name, **session)`` —
+    the session dict (from a prior ``export_credentials()``) carries
+    ``pronote_url`` / ``username`` / ``password`` / ``uuid`` / ``client_identifier``
+    under exactly those keys. We don't pass ``url`` or ``username`` separately
+    (that would trigger "got multiple values for argument"). The mock signature
+    accepts arbitrary kwargs so any drift in the session shape is captured
+    instead of crashing the test.
+    """
     captured: dict = {}
 
-    def _token_login(cls, url, **kwargs):
-        captured["url"] = url
+    def _token_login(cls, **kwargs):
         captured.update(kwargs)
         return MagicMock(spec=pronotepy.Client)
 
     monkeypatch.setattr(pronotepy.Client, "token_login", classmethod(_token_login))
 
+    session = {
+        "pronote_url": "https://example.com/pronote/eleve.html",
+        "username": "u",
+        "password": "p",
+        "uuid": "deadbeef-1111-2222-3333-444444444444",
+        "client_identifier": "abc",
+    }
     client = build_or_resume_client(
         "https://example.com/pronote/eleve.html",
         "eleve",
         "u",
         "p",
-        session={"token": "abc"},
+        session=session,
         device_name="home-assistant-12345678",
     )
     assert client is not None
     assert captured.get("device_name") == "home-assistant-12345678"
-    assert captured.get("token") == "abc"
+    assert captured.get("pronote_url") == "https://example.com/pronote/eleve.html"
     assert captured.get("username") == "u"
+    assert captured.get("uuid") == "deadbeef-1111-2222-3333-444444444444"
 
 
 def test_build_or_resume_client_falls_back_on_crypto_error(monkeypatch):
