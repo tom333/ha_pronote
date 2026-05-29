@@ -28,6 +28,14 @@
           "username": "Identifiant",
           "password": "Mot de passe"
         }
+      },
+      "reconfigure": {
+        "title": "Modifier l'URL ou le type de compte Pronote",
+        "description": "Modifiez l'URL de l'espace Pronote ou le type de compte pour {child_name}. L'identifiant et le mot de passe restent inchangés.",
+        "data": {
+          "url": "URL de votre espace Pronote",
+          "account_type": "Type de compte"
+        }
       }
     },
     "error": {
@@ -38,7 +46,9 @@
     },
     "abort": {
       "already_configured": "Ce compte / enfant Pronote est déjà configuré.",
-      "reauth_successful": "Ré-authentification réussie — identifiants Pronote mis à jour."
+      "reauth_successful": "Ré-authentification réussie — identifiants Pronote mis à jour.",
+      "reconfigure_successful": "Configuration réussie — paramètres Pronote mis à jour.",
+      "child_identifier_changed": "La nouvelle URL ou le nouveau compte expose un enfant différent. Supprimez cette entrée et recréez-la pour suivre le nouvel enfant."
     }
   },
   "entity": {

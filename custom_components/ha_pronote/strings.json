@@ -28,6 +28,14 @@
           "username": "Username",
           "password": "Password"
         }
+      },
+      "reconfigure": {
+        "title": "Change Pronote URL or account type",
+        "description": "Edit the Pronote space URL or account type for {child_name}. Username and password stay the same.",
+        "data": {
+          "url": "Pronote space URL",
+          "account_type": "Account type"
+        }
       }
     },
     "error": {
@@ -38,7 +46,9 @@
     },
     "abort": {
       "already_configured": "This Pronote account / child is already configured.",
-      "reauth_successful": "Re-authentication successful — Pronote credentials updated."
+      "reauth_successful": "Re-authentication successful — Pronote credentials updated.",
+      "reconfigure_successful": "Configuration successful — Pronote settings updated.",
+      "child_identifier_changed": "The new URL or account exposes a different child. Delete this entry and re-add it to track the new child."
     }
   },
   "entity": {
