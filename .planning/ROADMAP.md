@@ -172,7 +172,7 @@ Plans:
 - [x] 06-04-PLAN.md — Reconfigure flow (D-05..D-08): async_step_reconfigure + _RECONFIGURE_SCHEMA + set_active_child typed-wrap + child_identifier mismatch abort + i18n keys + 6 tests (Wave 3, AUTH-06)
 
 **Wave 4** *(blocked on Wave 3 — OptionsFlow on top of all read paths + flows)*
-- [ ] 06-05-PLAN.md — OptionsFlow multi-step (D-09..D-16): HaPronoteOptionsFlow(OptionsFlowWithReload) + _POLLING_SCHEMA (9 fields) + _DISPLAY_SCHEMA (2 fields, lambda v: v.strip()) + _options_schema_defaults helper + async_get_options_flow + i18n keys + 7 tests + test_options_change_triggers_reload + test_no_deprecated_add_update_listener_in_production (Wave 4, COORD-03 + OPT-01 + OPT-02 + OPT-03 + OPT-04)
+- [x] 06-05-PLAN.md — OptionsFlow multi-step (D-09..D-16): HaPronoteOptionsFlow(OptionsFlowWithReload) + _POLLING_SCHEMA (9 fields) + _DISPLAY_SCHEMA (2 fields, lambda v: v.strip()) + _options_schema_defaults helper + async_get_options_flow + i18n keys + 7 tests + test_options_change_triggers_reload + test_no_deprecated_add_update_listener_in_production (Wave 4, COORD-03 + OPT-01 + OPT-02 + OPT-03 + OPT-04)
 
 **Wave 5** *(blocked on Waves 2-4 — verifies multi-child invariants hold through all three mutation flows)*
 - [ ] 06-06-PLAN.md — Multi-child isolation tests (4 tests) — OptionsFlow / reauth / reconfigure / coordinator independence (Wave 5, AUTH-03)
