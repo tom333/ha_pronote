@@ -21,8 +21,15 @@ from custom_components.ha_pronote.api import (
     PronoteIntegrationError,
     RateLimitedError,
 )
-from custom_components.ha_pronote.config_flow import _REAUTH_SCHEMA, _USER_SCHEMA
+from custom_components.ha_pronote.config_flow import (
+    _REAUTH_SCHEMA,
+    _USER_SCHEMA,
+    HaPronoteOptionsFlow,
+    _options_schema_defaults,
+)
 from custom_components.ha_pronote.const import DOMAIN
+from homeassistant.config_entries import OptionsFlowWithReload
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import TextSelector, TextSelectorType
 
 _USER_INPUT_ELEVE = {
@@ -562,3 +569,191 @@ async def test_reconfigure_session_cleared_when_account_type_changes(hass, mock_
     assert entry.data["session"] is None
     assert entry.data["url"] == entry_data["url"]
     assert entry.data["account_type"] == "parent"
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — OptionsFlow tests (COORD-03, OPT-01..04, D-09..D-16).
+# ---------------------------------------------------------------------------
+
+
+def test_options_flow_subclasses_options_flow_with_reload() -> None:
+    """CRITICAL Gotcha #1 — HaPronoteOptionsFlow inherits from OptionsFlowWithReload."""
+    assert issubclass(HaPronoteOptionsFlow, OptionsFlowWithReload)
+
+
+_VALID_POLLING_INPUT = {
+    "refresh_interval": 15,
+    "adaptive_polling_enabled": False,
+    "afternoon_interval": 10,
+    "afternoon_window_start": "17:00:00",
+    "afternoon_window_end": "20:00:00",
+    "suspended_cadence": 360,
+    "quiet_cadence": 240,
+    "quiet_hours_start": "22:00:00",
+    "quiet_hours_end": "06:00:00",
+}
+
+
+async def test_options_flow_polling_then_display_commit(hass, mock_pronote_client) -> None:
+    """COORD-03 + OPT-01..04 — multi-step OptionsFlow commits all 11 keys to entry.options."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        assert result["step_id"] == "polling"
+
+        result = await hass.config_entries.options.async_configure(result["flow_id"], user_input=_VALID_POLLING_INPUT)
+        assert result["step_id"] == "display"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={"nickname": "Jeannot", "school_tz": "Pacific/Noumea"},
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == "create_entry"
+    assert entry.options["refresh_interval"] == 15
+    assert entry.options["adaptive_polling_enabled"] is False
+    assert entry.options["afternoon_interval"] == 10
+    assert entry.options["nickname"] == "Jeannot"
+    assert entry.options["school_tz"] == "Pacific/Noumea"
+
+
+async def test_options_invalid_school_tz_shows_form_error(hass, mock_pronote_client) -> None:
+    """Pitfall #5 — invalid IANA tz → form error, no entry.options mutation."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        valid_polling = {
+            **_VALID_POLLING_INPUT,
+            "adaptive_polling_enabled": True,
+            "afternoon_interval": 15,
+            "refresh_interval": 30,
+        }
+        result = await hass.config_entries.options.async_configure(result["flow_id"], user_input=valid_polling)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={"nickname": "", "school_tz": "Pacific/NotARealZone"},
+        )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"school_tz": "invalid_school_tz"}
+    assert entry.options.get("school_tz") != "Pacific/NotARealZone"
+
+
+@pytest.mark.parametrize(
+    ("nickname_input", "expected_options_nickname", "expected_title", "expected_device_name"),
+    [
+        ("", "", None, "Jean Dupont"),
+        ("   ", "", None, "Jean Dupont"),
+        ("Jeannot", "Jeannot", "Jeannot", "Jeannot"),
+        ("  Jeannot  ", "Jeannot", "Jeannot", "Jeannot"),
+    ],
+    ids=["empty", "whitespace", "truthy", "stripped"],
+)
+async def test_options_nickname_strip_and_title_update(  # noqa: PLR0913
+    hass,
+    mock_pronote_client,
+    nickname_input,
+    expected_options_nickname,
+    expected_title,
+    expected_device_name,
+) -> None:
+    """OPT-03 / D-13 / D-15 / D-16 — nickname strip + title update + device-registry round-trip."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        title="Jean Dupont (eleve)",
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    original_title = entry.title
+
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        valid_polling = {
+            **_VALID_POLLING_INPUT,
+            "adaptive_polling_enabled": True,
+            "afternoon_interval": 15,
+            "refresh_interval": 30,
+        }
+        result = await hass.config_entries.options.async_configure(result["flow_id"], user_input=valid_polling)
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={"nickname": nickname_input, "school_tz": "Pacific/Noumea"},
+        )
+        await hass.async_block_till_done()
+
+    assert entry.options["nickname"] == expected_options_nickname
+    if expected_title is None:
+        assert entry.title == original_title
+    else:
+        assert entry.title == expected_title
+
+    # W-5: device-registry round-trip.
+    dev_reg = dr.async_get(hass)
+    device = dev_reg.async_get_device(identifiers={(DOMAIN, entry.data["child_identifier"])})
+    assert device is not None, f"No device for child_identifier={entry.data['child_identifier']}"
+    assert device.name_by_user is None
+    assert device.name == expected_device_name
+
+
+async def test_options_defaults_match_resolve_options(hass, mock_pronote_client) -> None:
+    """D-11 — _options_schema_defaults agrees with coordinator._resolve_options on defaults."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        options={},
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        coord = entry.runtime_data.coordinator
+        resolved = coord._resolve_options()  # noqa: SLF001
+
+    defaults = _options_schema_defaults(entry)
+    assert defaults["refresh_interval"] == int(resolved.refresh_interval.total_seconds() // 60)
+    assert defaults["afternoon_interval"] == int(resolved.afternoon_interval.total_seconds() // 60)
+    assert defaults["suspended_cadence"] == int(resolved.suspended_cadence.total_seconds() // 60)
+    assert defaults["quiet_cadence"] == int(resolved.quiet_cadence.total_seconds() // 60)
+    assert defaults["adaptive_polling_enabled"] is resolved.adaptive_enabled
+    assert defaults["afternoon_window_start"] == resolved.afternoon_window[0].isoformat()
+    assert defaults["afternoon_window_end"] == resolved.afternoon_window[1].isoformat()
+    assert defaults["quiet_hours_start"] == resolved.quiet_hours[0].isoformat()
+    assert defaults["quiet_hours_end"] == resolved.quiet_hours[1].isoformat()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime as _datetime
+from datetime import date, datetime as _datetime, timedelta as _timedelta
 import time
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo as _ZoneInfo
@@ -1742,3 +1742,56 @@ async def test_resolve_options_adaptive_default_is_true(
         coord = mock_config_entry.runtime_data.coordinator
         options = coord._resolve_options()  # noqa: SLF001
         assert options.adaptive_enabled is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — OPT-04 / D-12 REVISED: OptionsFlowWithReload triggers coordinator
+# re-instantiation. No entry.add_update_listener wiring; base class handles it.
+# ---------------------------------------------------------------------------
+
+
+async def test_options_change_triggers_reload(
+    hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today
+) -> None:
+    """OPT-04 / D-12 REVISED — OptionsFlowWithReload re-instantiates coordinator on commit."""
+    today = _datetime(2026, 5, 7, 14, 0, 0, tzinfo=_ZoneInfo("Pacific/Noumea")).date()
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        coord_before = mock_config_entry.runtime_data.coordinator
+
+        result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                "refresh_interval": 15,
+                "adaptive_polling_enabled": True,
+                "afternoon_interval": 15,
+                "afternoon_window_start": "17:00:00",
+                "afternoon_window_end": "20:00:00",
+                "suspended_cadence": 360,
+                "quiet_cadence": 240,
+                "quiet_hours_start": "22:00:00",
+                "quiet_hours_end": "06:00:00",
+            },
+        )
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={"nickname": "", "school_tz": "Pacific/Noumea"},
+        )
+        await hass.async_block_till_done()
+
+    coord_after = mock_config_entry.runtime_data.coordinator
+    assert coord_after is not coord_before
+    new_options = coord_after._resolve_options()  # noqa: SLF001
+    assert new_options.refresh_interval == _timedelta(minutes=15)

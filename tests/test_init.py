@@ -197,3 +197,87 @@ async def test_async_setup_entry_school_tz_invalid_raises_zoneinfo_error(
     # the exception type via the state machine.
     if entry.reason is not None:
         assert "NotARealZone" in entry.reason or "ZoneInfo" in entry.reason
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 W-2 — permanent regression guards for the three Critical Gotchas.
+# Walk-and-grep across the production tree; same pattern for all three guards.
+# ---------------------------------------------------------------------------
+
+
+def test_no_deprecated_add_update_listener_in_production() -> None:
+    """D-12 REVISED — production code MUST NOT reference entry.add_update_listener.
+
+    OptionsFlowWithReload (Plan 06-05) is the replacement; using add_update_listener
+    together with reloading methods is deprecated 2026-05-07, error in 2026.6,
+    removed in 2026.12.
+    """
+    import pathlib
+
+    root = pathlib.Path("custom_components/ha_pronote")
+    offenders = [str(f) for f in root.rglob("*.py") if "add_update_listener(" in f.read_text(encoding="utf-8")]
+    assert not offenders, (
+        f"Found deprecated `entry.add_update_listener(...)` call in {offenders}. "
+        f"Use OptionsFlowWithReload instead (06 D-12 REVISED, RESEARCH Gotcha #1)."
+    )
+
+
+def test_no_vol_strip_in_production() -> None:
+    """W-2 permanent regression guard — `vol.Strip` does NOT exist in voluptuous.
+
+    Using it raises AttributeError at module import time, taking down the whole
+    integration. Replacement: `lambda v: v.strip()` inside `vol.All(...)`. See
+    06-RESEARCH.md Critical Gotcha #2.
+
+    The grep matches the attribute access (`vol.Strip`) but excludes lines where
+    the token appears only inside string literals or comments that describe the
+    gotcha — we match the bare attribute followed by `(` or whitespace-then-
+    something-codey, NOT the literal substring (which would false-positive on
+    documentation strings that warn against using the attribute).
+    """
+    import pathlib
+    import re
+
+    root = pathlib.Path("custom_components/ha_pronote")
+    # Match attribute access shapes only: `vol.Strip(`, `vol.Strip,`, `vol.Strip)`,
+    # `vol.Strip\s+` — NOT inside a comment or docstring that mentions the name.
+    pattern = re.compile(r"(?<!\.)\bvol\.Strip\b(?=\s*[(,)\s])")
+    offenders: list[str] = []
+    for f in root.rglob("*.py"):
+        for line in f.read_text(encoding="utf-8").splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("#"):
+                continue  # comments warning against the gotcha are allowed
+            if pattern.search(line):
+                offenders.append(str(f))
+                break
+    assert not offenders, (
+        f"Found `vol.Strip` call in {offenders}. The voluptuous strip helper does "
+        f"not exist and raises AttributeError at import. Use `lambda v: v.strip()` "
+        f"inside vol.All(...) instead. See 06-RESEARCH.md Critical Gotcha #2."
+    )
+
+
+def test_no_options_flow_init_config_entry_assignment() -> None:
+    """W-2 permanent regression guard — OptionsFlow.__init__(config_entry) is removed.
+
+    HA deprecated the pattern in 2024.12 and removed it in 2025.12 — HA now
+    injects `self.config_entry` as a read-only property on the OptionsFlow base
+    class. Passing `config_entry` to `__init__` or assigning
+    `self.config_entry = config_entry` raises AttributeError at flow start.
+    See 06-RESEARCH.md Critical Gotcha #3.
+    """
+    import pathlib
+    import re
+
+    root = pathlib.Path("custom_components/ha_pronote")
+    offenders: list[str] = []
+    for f in root.rglob("*.py"):
+        text = f.read_text(encoding="utf-8")
+        if re.search(r"def __init__\(self,\s*config_entry", text) or "self.config_entry = config_entry" in text:
+            offenders.append(str(f))
+    assert not offenders, (
+        f"Found removed OptionsFlow.__init__(config_entry) pattern in {offenders}. "
+        f"HA 2025.12+ injects self.config_entry automatically — remove the arg "
+        f"and the assignment. See 06-RESEARCH.md Critical Gotcha #3."
+    )
