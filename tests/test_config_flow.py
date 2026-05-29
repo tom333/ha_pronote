@@ -8,6 +8,7 @@ requests-mock).
 
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -757,3 +758,251 @@ async def test_options_defaults_match_resolve_options(hass, mock_pronote_client)
     assert defaults["afternoon_window_end"] == resolved.afternoon_window[1].isoformat()
     assert defaults["quiet_hours_start"] == resolved.quiet_hours[0].isoformat()
     assert defaults["quiet_hours_end"] == resolved.quiet_hours[1].isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Multi-child isolation tests (AUTH-03, D-17).
+# Phase 3 D-05's unique_id format {url_host}:{username}:{child_identifier} already
+# encodes one-ConfigEntry-per-child. Phase 6 adds 3 mutation flows; these tests
+# verify each flow on entry A leaves entry B untouched.
+# ---------------------------------------------------------------------------
+
+
+def _make_entry(
+    *,
+    unique_id: str,
+    child_identifier: str,
+    child_name: str,
+    **overrides,
+) -> MockConfigEntry:
+    """Factory for two-children-same-parent test entries (D-17)."""
+    data = {
+        **_REAUTH_ENTRY_DATA,
+        "child_identifier": child_identifier,
+        "child_name": child_name,
+        **{k: v for k, v in overrides.items() if k != "options"},
+    }
+    return MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=unique_id,
+        data=data,
+        options=overrides.get("options", {}),
+        version=1,
+    )
+
+
+async def test_two_children_options_are_independent(hass, mock_pronote_client) -> None:
+    """AUTH-03 / D-17 — OptionsFlow on entry A does NOT mutate entry B's options."""
+    entry_a = _make_entry(
+        unique_id="example.com:alice:jean_dupont",
+        child_identifier="jean_dupont",
+        child_name="Jean Dupont",
+        options={"refresh_interval": 30},
+    )
+    entry_b = _make_entry(
+        unique_id="example.com:alice:marie_dupont",
+        child_identifier="marie_dupont",
+        child_name="Marie Dupont",
+        options={"refresh_interval": 60},
+    )
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        entry_a.add_to_hass(hass)
+        entry_b.add_to_hass(hass)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(entry_a.entry_id)
+        assert result["step_id"] == "polling"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                "refresh_interval": 15,
+                "adaptive_polling_enabled": True,
+                "afternoon_interval": 15,
+                "afternoon_window_start": "17:00:00",
+                "afternoon_window_end": "20:00:00",
+                "suspended_cadence": 360,
+                "quiet_cadence": 240,
+                "quiet_hours_start": "22:00:00",
+                "quiet_hours_end": "06:00:00",
+            },
+        )
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={"nickname": "Jeannot", "school_tz": "Pacific/Noumea"},
+        )
+        await hass.async_block_till_done()
+
+    assert entry_a.options["refresh_interval"] == 15
+    assert entry_a.options["nickname"] == "Jeannot"
+    assert entry_b.options["refresh_interval"] == 60
+    assert "nickname" not in entry_b.options
+    assert "adaptive_polling_enabled" not in entry_b.options
+
+
+async def test_two_children_reauth_a_does_not_affect_b(hass, mock_pronote_client) -> None:
+    """AUTH-03 — reauth on entry A only mutates entry A's data."""
+    entry_a = _make_entry(
+        unique_id="example.com:alice:jean_dupont",
+        child_identifier="jean_dupont",
+        child_name="Jean Dupont",
+    )
+    entry_b_data = {
+        **_REAUTH_ENTRY_DATA,
+        "child_identifier": "marie_dupont",
+        "child_name": "Marie Dupont",
+        "password": "original_b_pw",
+    }
+    entry_b = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:marie_dupont",
+        data=entry_b_data,
+        version=1,
+    )
+    entry_a.add_to_hass(hass)
+    entry_b.add_to_hass(hass)
+
+    result = await entry_a.start_reauth_flow(hass)
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"username": "alice", "password": "new_a_pw"},
+        )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reauth_successful"
+    assert entry_a.data["password"] == "new_a_pw"
+    assert entry_b.data["password"] == "original_b_pw"
+    assert entry_b.data["child_identifier"] == "marie_dupont"
+
+
+async def test_two_children_reconfigure_a_does_not_affect_b(hass, mock_pronote_client) -> None:
+    """AUTH-03 / SC#4 — reconfigure on entry A only mutates entry A's data.
+
+    Host change is a valid happy path because unique_id is frozen per SC#4.
+    """
+    original_unique_id_a = "example.com:alice:jean_dupont"
+    original_unique_id_b = "example.com:alice:marie_dupont"
+    entry_a = _make_entry(
+        unique_id=original_unique_id_a,
+        child_identifier="jean_dupont",
+        child_name="Jean Dupont",
+    )
+    entry_b_data = {
+        **_REAUTH_ENTRY_DATA,
+        "child_identifier": "marie_dupont",
+        "child_name": "Marie Dupont",
+        "url": "https://example.com/pronote/eleve.html",
+    }
+    entry_b = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=original_unique_id_b,
+        data=entry_b_data,
+        version=1,
+    )
+    entry_a.add_to_hass(hass)
+    entry_b.add_to_hass(hass)
+
+    result = await entry_a.start_reconfigure_flow(hass)
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                "url": "https://newhost.example.com/pronote/eleve.html",
+                "account_type": "eleve",
+            },
+        )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    assert entry_a.data["url"] == "https://newhost.example.com/pronote/eleve.html"
+    assert entry_b.data["url"] == "https://example.com/pronote/eleve.html"
+    assert entry_b.data["child_identifier"] == "marie_dupont"
+    assert entry_a.unique_id == original_unique_id_a
+    assert entry_b.unique_id == original_unique_id_b
+
+
+async def test_reconfigure_url_change_preserves_unique_id(hass, mock_pronote_client) -> None:
+    """ROADMAP SC#4 — reconfigure changing only the host MUST preserve unique_id.
+
+    Entity history (Recorder, energy stats, automations) is keyed on unique_id.
+    """
+    original_unique_id = "example.com:alice:jean_dupont"
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=original_unique_id,
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+    new_url = "https://newhost.example.com/pronote/eleve.html"
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"url": new_url, "account_type": "eleve"},
+        )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.unique_id == original_unique_id, (
+        f"SC#4 violation: unique_id mutated from {original_unique_id!r} to "
+        f"{entry.unique_id!r} on URL change. Entity history is keyed on unique_id; "
+        f"async_step_reconfigure MUST NOT call async_set_unique_id."
+    )
+    assert entry.data["url"] == new_url
+
+
+async def test_two_children_two_distinct_coordinators_after_setup(
+    hass, mock_pronote_client, snapshot_with_n_lessons_today
+) -> None:
+    """AUTH-03 — each entry gets its own coordinator instance after setup."""
+    entry_a = _make_entry(
+        unique_id="example.com:alice:jean_dupont",
+        child_identifier="jean_dupont",
+        child_name="Jean Dupont",
+    )
+    entry_b = _make_entry(
+        unique_id="example.com:alice:marie_dupont",
+        child_identifier="marie_dupont",
+        child_name="Marie Dupont",
+    )
+    today = date(2026, 5, 7)
+    with (
+        patch(
+            "custom_components.ha_pronote.build_or_resume_client",
+            return_value=mock_pronote_client,
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        entry_a.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry_a.entry_id)
+        await hass.async_block_till_done()
+        entry_b.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry_b.entry_id)
+        await hass.async_block_till_done()
+
+    coord_a = entry_a.runtime_data.coordinator
+    coord_b = entry_b.runtime_data.coordinator
+    assert coord_a is not coord_b
+    assert entry_a.runtime_data.child_identifier == "jean_dupont"
+    assert entry_b.runtime_data.child_identifier == "marie_dupont"
