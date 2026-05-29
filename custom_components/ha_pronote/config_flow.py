@@ -33,6 +33,7 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pronotepy
 from slugify import slugify
@@ -41,13 +42,35 @@ import voluptuous as vol
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow, OptionsFlowWithReload
+from homeassistant.core import callback
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+    TimeSelector,
+)
 
 from .api import build_client, set_active_child
 from .api.client import build_or_resume_client  # Phase 3 C-02 single seam; Phase 6 reauth/reconfigure reuse.
 from .api.errors import AuthError, CommunicationError, PronoteIntegrationError, RateLimitedError
-from .const import DOMAIN
+from .const import (
+    DEFAULT_ADAPTIVE_POLLING_ENABLED,
+    DEFAULT_AFTERNOON_INTERVAL,
+    DEFAULT_AFTERNOON_WINDOW,
+    DEFAULT_QUIET_CADENCE,
+    DEFAULT_QUIET_HOURS,
+    DEFAULT_REFRESH_INTERVAL,
+    DEFAULT_SCHOOL_TZ,
+    DEFAULT_SUSPENDED_CADENCE,
+    DOMAIN,
+    NICKNAME_MAX_LEN,
+)
 
 # D-04 typed-exception → form-error mapping (re-introduced after Phase 3 DEBUG MODE
 # per Phase 6 CONTEXT.md decision — reauth/reconfigure depend on this surface).
@@ -108,10 +131,91 @@ _RECONFIGURE_SCHEMA = vol.Schema(
 )
 
 
+# Phase 6 D-09 / D-10 — OptionsFlow step "Polling" (9 fields).
+# Field order: refresh_interval (most-used lever) → adaptive_polling_enabled toggle
+# → afternoon_* → suspended_cadence → quiet_*.
+_POLLING_SCHEMA = vol.Schema(
+    {
+        vol.Required("refresh_interval"): NumberSelector(
+            NumberSelectorConfig(min=1, max=1440, mode=NumberSelectorMode.BOX, unit_of_measurement="min")
+        ),
+        vol.Required("adaptive_polling_enabled"): BooleanSelector(),
+        vol.Required("afternoon_interval"): NumberSelector(
+            NumberSelectorConfig(min=1, max=1440, mode=NumberSelectorMode.BOX, unit_of_measurement="min")
+        ),
+        vol.Required("afternoon_window_start"): TimeSelector(),
+        vol.Required("afternoon_window_end"): TimeSelector(),
+        vol.Required("suspended_cadence"): NumberSelector(
+            NumberSelectorConfig(min=1, max=1440, mode=NumberSelectorMode.BOX, unit_of_measurement="min")
+        ),
+        vol.Required("quiet_cadence"): NumberSelector(
+            NumberSelectorConfig(min=1, max=1440, mode=NumberSelectorMode.BOX, unit_of_measurement="min")
+        ),
+        vol.Required("quiet_hours_start"): TimeSelector(),
+        vol.Required("quiet_hours_end"): TimeSelector(),
+    }
+)
+
+
+# Phase 6 D-09 / D-10 / D-16 (REVISED — Critical Gotcha #2: the strip helper
+# does NOT exist on the voluptuous module; use a lambda inside vol.All).
+# Step "Display" (2 fields): nickname + school_tz.
+_DISPLAY_SCHEMA = vol.Schema(
+    {
+        vol.Optional("nickname", default=""): vol.All(
+            cv.string,
+            vol.Length(max=NICKNAME_MAX_LEN),
+            # CRITICAL Gotcha #2 — the lambda is the canonical replacement for
+            # the voluptuous strip helper (which does not exist and would raise
+            # AttributeError at import). Empty-post-strip is handled at the read
+            # site (entity.device_info Plan 06-02) by the fallback chain
+            # `(... or "").strip() or entry.data["child_name"]`.
+            lambda v: v.strip(),
+        ),
+        vol.Required("school_tz", default=DEFAULT_SCHOOL_TZ): str,
+    }
+)
+
+
+def _options_schema_defaults(entry: ConfigEntry) -> dict[str, Any]:
+    """D-11 — single source of truth between OptionsFlow defaults and runtime read.
+
+    Returns a dict of `entry.options[key]` if set, else the const-derived default.
+    The dict feeds `add_suggested_values_to_schema` so the form shows current values;
+    coordinator._resolve_options reads the same `entry.options.get` paths so any
+    drift would surface in `test_options_defaults_match_resolve_options`.
+    """
+    opts = entry.options
+    return {
+        "refresh_interval": opts.get("refresh_interval", int(DEFAULT_REFRESH_INTERVAL.total_seconds() // 60)),
+        "adaptive_polling_enabled": opts.get("adaptive_polling_enabled", DEFAULT_ADAPTIVE_POLLING_ENABLED),
+        "afternoon_interval": opts.get("afternoon_interval", int(DEFAULT_AFTERNOON_INTERVAL.total_seconds() // 60)),
+        "afternoon_window_start": opts.get("afternoon_window_start", DEFAULT_AFTERNOON_WINDOW[0].isoformat()),
+        "afternoon_window_end": opts.get("afternoon_window_end", DEFAULT_AFTERNOON_WINDOW[1].isoformat()),
+        "quiet_hours_start": opts.get("quiet_hours_start", DEFAULT_QUIET_HOURS[0].isoformat()),
+        "quiet_hours_end": opts.get("quiet_hours_end", DEFAULT_QUIET_HOURS[1].isoformat()),
+        "suspended_cadence": opts.get("suspended_cadence", int(DEFAULT_SUSPENDED_CADENCE.total_seconds() // 60)),
+        "quiet_cadence": opts.get("quiet_cadence", int(DEFAULT_QUIET_CADENCE.total_seconds() // 60)),
+        "nickname": opts.get("nickname", ""),
+        "school_tz": opts.get("school_tz", DEFAULT_SCHOOL_TZ),
+    }
+
+
 class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
     """Real flow -- D-01 user step, optional D-02 pick_child step."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """HA hook for OptionsFlow surfacing.
+
+        Critical Gotcha #3 — HaPronoteOptionsFlow() takes NO config_entry arg.
+        HA injects self.config_entry as a read-only property on the OptionsFlow
+        base class; passing it explicitly raises AttributeError on HA 2025.12+.
+        """
+        return HaPronoteOptionsFlow()
 
     def __init__(self) -> None:
         """Stash inter-step state -- pronotepy client + last user_input."""
@@ -408,4 +512,69 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
                 "child_index": child_index,  # D-08
                 "child_name": child_name,  # D-08 (DeviceInfo.name)
             },
+        )
+
+
+class HaPronoteOptionsFlow(OptionsFlowWithReload):
+    """Phase 6 — multi-step OptionsFlow with auto-reload on commit.
+
+    D-12 REVISED (RESEARCH Critical Gotcha #1) — inherits OptionsFlowWithReload,
+    NOT OptionsFlow + add_update_listener. The base class triggers async_unload_entry
+    + async_setup_entry automatically on async_create_entry, which propagates the new
+    options through coordinator._resolve_options + entity.device_info on the next setup.
+
+    Critical Gotcha #3 — __init__ takes NO config_entry; HA injects self.config_entry
+    as a read-only property (assignment raises AttributeError on HA 2025.12+).
+    """
+
+    def __init__(self) -> None:
+        """Stash inter-step state between polling + display steps.
+
+        NOT self.config_entry = ... — HA injects that as a read-only property
+        (Critical Gotcha #3, raises AttributeError on HA 2025.12+).
+        """
+        self._step1_data: dict[str, Any] = {}
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """D-10 — trampoline to step 'polling'. No menu screen."""
+        return await self.async_step_polling()
+
+    async def async_step_polling(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """D-10 — 9-field 'Polling' step; submit transitions to async_step_display."""
+        if user_input is not None:
+            self._step1_data = user_input
+            return await self.async_step_display()
+
+        suggested = _options_schema_defaults(self.config_entry)
+        return self.async_show_form(
+            step_id="polling",
+            data_schema=self.add_suggested_values_to_schema(_POLLING_SCHEMA, suggested),
+            description_placeholders={"child_name": self.config_entry.data["child_name"]},
+        )
+
+    async def async_step_display(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """D-10 / D-15 / Pitfall #5 — 2-field 'Display' step; commits all 11 keys."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            # Pitfall #5 — validate school_tz in the form, NOT at coordinator setup.
+            try:
+                ZoneInfo(user_input["school_tz"])
+            except ZoneInfoNotFoundError, ValueError:
+                errors["school_tz"] = "invalid_school_tz"
+            else:
+                merged = {**self._step1_data, **user_input}
+                # D-15 — update entry.title when nickname is set, so the
+                # Devices & Services panel shows the new name.
+                nickname = (merged.get("nickname") or "").strip()
+                if nickname:
+                    self.hass.config_entries.async_update_entry(self.config_entry, title=nickname)
+                # OptionsFlowWithReload triggers async_unload_entry + async_setup_entry.
+                return self.async_create_entry(title="", data=merged)
+
+        suggested = _options_schema_defaults(self.config_entry)
+        return self.async_show_form(
+            step_id="display",
+            data_schema=self.add_suggested_values_to_schema(_DISPLAY_SCHEMA, suggested),
+            errors=errors,
+            description_placeholders={"child_name": self.config_entry.data["child_name"]},
         )
