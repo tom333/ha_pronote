@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+import voluptuous as vol
 
 from custom_components.ha_pronote.api import (
     AuthError,
@@ -20,7 +21,7 @@ from custom_components.ha_pronote.api import (
     PronoteIntegrationError,
     RateLimitedError,
 )
-from custom_components.ha_pronote.config_flow import _USER_SCHEMA
+from custom_components.ha_pronote.config_flow import _REAUTH_SCHEMA, _USER_SCHEMA
 from custom_components.ha_pronote.const import DOMAIN
 from homeassistant.helpers.selector import TextSelector, TextSelectorType
 
@@ -215,3 +216,133 @@ async def test_create_entry_export_credentials_failure_aborts_cannot_connect(has
         result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input=_USER_INPUT_ELEVE)
     assert result["type"] == "abort"
     assert result["reason"] == "cannot_connect"
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Reauth flow tests (AUTH-05, D-01..D-04).
+# ---------------------------------------------------------------------------
+
+_REAUTH_ENTRY_DATA = {
+    "url": "https://example.com/pronote/eleve.html",
+    "account_type": "eleve",
+    "username": "alice",
+    "password": "old_pw",
+    "session": {"token": "old_session_blob"},
+    "child_identifier": "jean_dupont",
+    "child_index": None,
+    "child_name": "Jean Dupont",
+}
+
+
+async def test_reauth_flow_happy_path(hass, mock_pronote_client) -> None:
+    """AUTH-05 / D-01 / D-02 / D-03 — new password persisted, session cleared, URL preserved."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reauth_flow(hass)
+    assert result["type"] == "form"
+    assert result["step_id"] == "reauth_confirm"
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"username": "alice", "password": "new_pw"},
+        )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reauth_successful"
+    # D-02 — session cleared:
+    assert entry.data["session"] is None
+    # D-01 — username + password updated:
+    assert entry.data["username"] == "alice"
+    assert entry.data["password"] == "new_pw"
+    # RESEARCH Pitfall #6 — merge, not replace: url/account_type/child_* preserved:
+    assert entry.data["url"] == _REAUTH_ENTRY_DATA["url"]
+    assert entry.data["account_type"] == "eleve"
+    assert entry.data["child_identifier"] == "jean_dupont"
+    assert entry.data["child_name"] == "Jean Dupont"
+    assert entry.data["child_index"] is None
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected_error"),
+    [
+        (AuthError("bad creds"), "invalid_auth"),
+        (
+            RateLimitedError("Your IP address is suspended"),
+            "ip_suspended",
+        ),
+        (CommunicationError("network unreachable"), "cannot_connect"),
+        (
+            PronoteIntegrationError(ErrorReason.PARSE_ERROR, "weird"),
+            "unknown",
+        ),
+    ],
+)
+async def test_reauth_error_mapping(hass, raised, expected_error) -> None:
+    """AUTH-05 D-04 — typed exceptions surface as form-error keys; entry.data UNCHANGED on error."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        side_effect=raised,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"username": "alice", "password": "p"},
+        )
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": expected_error}
+    # Entry data MUST be untouched on error.
+    assert entry.data["password"] == "old_pw"
+    assert entry.data["session"] == {"token": "old_session_blob"}
+
+
+async def test_reauth_updates_username_and_password(hass, mock_pronote_client) -> None:
+    """D-01 — username CAN be edited at reauth (broader than AUTH-05's strict reading)."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reauth_flow(hass)
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"username": "alice_renamed", "password": "new_pw"},
+        )
+
+    assert entry.data["username"] == "alice_renamed"
+    assert entry.data["password"] == "new_pw"
+
+
+def test_reauth_schema_masks_password_field() -> None:
+    """D-01 / CR-01 mirror — reauth password field is TextSelector(PASSWORD)."""
+    password_validator = _REAUTH_SCHEMA.schema[vol.Required("password")]
+    assert isinstance(password_validator, TextSelector)
+    # The selector config carries type=password — assert via its config attribute.
+    # Brittle: accesses TextSelector internal config dict. Mirrors Phase 3
+    # test_user_schema_masks_password_field; replace both if HA Core changes
+    # selector internals.
+    assert password_validator.config["type"] == TextSelectorType.PASSWORD.value
