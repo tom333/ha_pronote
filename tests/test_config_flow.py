@@ -8,7 +8,7 @@ requests-mock).
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -346,3 +346,219 @@ def test_reauth_schema_masks_password_field() -> None:
     # test_user_schema_masks_password_field; replace both if HA Core changes
     # selector internals.
     assert password_validator.config["type"] == TextSelectorType.PASSWORD.value
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Reconfigure flow tests (AUTH-06, D-05..D-08, ROADMAP SC#4).
+# ---------------------------------------------------------------------------
+
+
+async def test_reconfigure_form_prefilled(hass) -> None:
+    """D-05 — reconfigure form pre-filled with current URL + account_type."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+    assert result["type"] == "form"
+    assert result["step_id"] == "reconfigure"
+
+
+async def test_reconfigure_flow_url_change_happy_path(hass, mock_pronote_client) -> None:
+    """AUTH-06 / D-05 / D-08 / SC#4 — URL host change is a happy path; unique_id preserved.
+
+    Per ROADMAP SC#4, entity history is keyed on unique_id, so the unique_id MUST NOT
+    mutate across a host change. The D-06 guard (child_identifier comparison) is the
+    ONLY guard against an URL pointing to a different child.
+    """
+    original_unique_id = "example.com:alice:jean_dupont"
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=original_unique_id,
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+
+    result = await entry.start_reconfigure_flow(hass)
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                "url": "https://newhost.com/pronote/eleve.html",  # HOST CHANGE
+                "account_type": "eleve",
+            },
+        )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    # D-05: URL changed.
+    assert entry.data["url"] == "https://newhost.com/pronote/eleve.html"
+    # D-08: session cleared because URL changed.
+    assert entry.data["session"] is None
+    # Merge contract: credentials + child_* preserved.
+    assert entry.data["username"] == "alice"
+    assert entry.data["password"] == "old_pw"
+    assert entry.data["child_identifier"] == "jean_dupont"
+    assert entry.data["child_name"] == "Jean Dupont"
+    assert entry.data["child_index"] is None
+    # SC#4: unique_id PRESERVED across the host change — entity history intact.
+    assert entry.unique_id == original_unique_id
+
+
+async def test_reconfigure_aborts_on_child_identifier_mismatch(hass) -> None:
+    """D-06 — new URL exposes a different child → abort, NO entry mutation, unique_id preserved."""
+    original_unique_id = "example.com:alice:jean_dupont"
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=original_unique_id,
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+
+    # Build a fresh mock client whose info.name resolves to a DIFFERENT child name.
+    other_child_client = MagicMock()
+    other_child_client.info = MagicMock()
+    other_child_client.info.name = "Other Child"
+    other_child_client.children = []
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=other_child_client,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                "url": "https://example.com/pronote/eleve.html",
+                "account_type": "eleve",
+            },
+        )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "child_identifier_changed"
+    # Entry data MUST be untouched on abort.
+    assert entry.data["url"] == _REAUTH_ENTRY_DATA["url"]
+    assert entry.data["session"] == {"token": "old_session_blob"}
+    assert entry.data["child_identifier"] == "jean_dupont"
+    # unique_id also untouched.
+    assert entry.unique_id == original_unique_id
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected_error"),
+    [
+        (AuthError("bad creds"), "invalid_auth"),
+        (
+            RateLimitedError("Your IP address is suspended"),
+            "ip_suspended",
+        ),
+        (CommunicationError("network unreachable"), "cannot_connect"),
+        (
+            PronoteIntegrationError(ErrorReason.PARSE_ERROR, "weird"),
+            "unknown",
+        ),
+    ],
+)
+async def test_reconfigure_error_mapping(hass, raised, expected_error) -> None:
+    """AUTH-06 — typed exceptions surface as form-error keys; entry.data UNCHANGED."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        side_effect=raised,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                "url": "https://newhost.com/pronote/eleve.html",
+                "account_type": "eleve",
+            },
+        )
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": expected_error}
+    # Entry untouched on error.
+    assert entry.data["url"] == _REAUTH_ENTRY_DATA["url"]
+    assert entry.data["session"] == {"token": "old_session_blob"}
+
+
+async def test_reconfigure_session_preserved_when_no_change(hass, mock_pronote_client) -> None:
+    """D-08 — neither URL nor account_type changed → session preserved."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:jean_dupont",
+        data=_REAUTH_ENTRY_DATA,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                "url": _REAUTH_ENTRY_DATA["url"],
+                "account_type": _REAUTH_ENTRY_DATA["account_type"],
+            },
+        )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    # D-08: session PRESERVED because nothing meaningful changed.
+    assert entry.data["session"] == {"token": "old_session_blob"}
+
+
+async def test_reconfigure_session_cleared_when_account_type_changes(hass, mock_parent_client_two_children) -> None:
+    """D-08 — account_type changed → session cleared."""
+    entry_data = {
+        **_REAUTH_ENTRY_DATA,
+        "child_identifier": "alice_dupont",
+        "child_name": "Alice Dupont",
+        "child_index": 0,
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="example.com:alice:alice_dupont",
+        data=entry_data,
+        version=1,
+    )
+    entry.add_to_hass(hass)
+    result = await entry.start_reconfigure_flow(hass)
+
+    with patch(
+        "custom_components.ha_pronote.config_flow.build_or_resume_client",
+        return_value=mock_parent_client_two_children,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                "url": entry_data["url"],
+                "account_type": "parent",
+            },
+        )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    # D-08: session cleared because account_type changed.
+    assert entry.data["session"] is None
+    assert entry.data["url"] == entry_data["url"]
+    assert entry.data["account_type"] == "parent"
