@@ -78,5 +78,35 @@
       "title": "[HA-Pronote] Pronote credentials rejected",
       "message": "Multiple authentication attempts failed. Check the persistent notification for retry timing and re-authentication instructions."
     }
+  },
+  "options": {
+    "step": {
+      "polling": {
+        "title": "Polling",
+        "description": "How often HA-Pronote queries Pronote, when to poll more frequently, and when to stay quiet. Settings apply to {child_name}.",
+        "data": {
+          "refresh_interval": "Refresh interval (min)",
+          "adaptive_polling_enabled": "Tighten polling 17h–20h on school evenings",
+          "afternoon_interval": "Afternoon refresh interval (min)",
+          "afternoon_window_start": "Afternoon tightening starts",
+          "afternoon_window_end": "Afternoon tightening ends",
+          "suspended_cadence": "Suspended cadence (weekends, vacations) (min)",
+          "quiet_cadence": "Night quiet cadence (min)",
+          "quiet_hours_start": "Quiet hours start",
+          "quiet_hours_end": "Quiet hours end"
+        }
+      },
+      "display": {
+        "title": "Display",
+        "description": "Optional per-child nickname and school timezone for {child_name}.",
+        "data": {
+          "nickname": "Child nickname (display only)",
+          "school_tz": "School timezone (IANA, e.g. Pacific/Noumea or Europe/Paris)"
+        }
+      }
+    },
+    "error": {
+      "invalid_school_tz": "Unknown timezone. Use an IANA name like Pacific/Noumea or Europe/Paris."
+    }
   }
 }

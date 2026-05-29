@@ -78,5 +78,35 @@
       "title": "[HA-Pronote] Identifiants Pronote rejetés",
       "message": "Plusieurs tentatives d'authentification ont échoué. Voir la notification persistante pour les instructions de ré-authentification."
     }
+  },
+  "options": {
+    "step": {
+      "polling": {
+        "title": "Polling",
+        "description": "Fréquence des requêtes Pronote, fenêtres de polling renforcé et heures calmes. Réglages appliqués à {child_name}.",
+        "data": {
+          "refresh_interval": "Intervalle de rafraîchissement (min)",
+          "adaptive_polling_enabled": "Resserrer le polling 17h–20h les soirs d'école",
+          "afternoon_interval": "Intervalle après-midi (min)",
+          "afternoon_window_start": "Début fenêtre après-midi",
+          "afternoon_window_end": "Fin fenêtre après-midi",
+          "suspended_cadence": "Cadence en suspension (week-ends, vacances) (min)",
+          "quiet_cadence": "Cadence heures calmes (nuit) (min)",
+          "quiet_hours_start": "Début heures calmes",
+          "quiet_hours_end": "Fin heures calmes"
+        }
+      },
+      "display": {
+        "title": "Affichage",
+        "description": "Surnom optionnel et fuseau horaire pour {child_name}.",
+        "data": {
+          "nickname": "Surnom de l'enfant (affichage uniquement)",
+          "school_tz": "Fuseau horaire scolaire (IANA, ex. Pacific/Noumea ou Europe/Paris)"
+        }
+      }
+    },
+    "error": {
+      "invalid_school_tz": "Fuseau horaire inconnu. Utilisez un nom IANA comme Pacific/Noumea ou Europe/Paris."
+    }
   }
 }
