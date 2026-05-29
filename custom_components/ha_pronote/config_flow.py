@@ -31,17 +31,21 @@ Banned in this file (CLAUDE.md "What NOT to Use" + Phase 1 D-30..D-35):
 from __future__ import annotations
 
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import pronotepy
 from slugify import slugify
 import voluptuous as vol
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, TextSelectorType
 
 from .api import build_client, set_active_child
+from .api.client import build_or_resume_client  # Phase 3 C-02 single seam; Phase 6 reauth/reconfigure reuse.
 from .api.errors import AuthError, CommunicationError, PronoteIntegrationError, RateLimitedError
 from .const import DOMAIN
 
@@ -79,6 +83,16 @@ _USER_SCHEMA = vol.Schema(
         vol.Required("account_type"): vol.In(["eleve", "parent"]),
         vol.Required("username"): str,
         # CR-01: password rendered as masked input in HA frontend.
+        vol.Required("password"): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+    }
+)
+
+
+# Phase 6 D-01 — reauth schema. Two fields only: username + password.
+# URL and account_type are preserved from entry.data; the user does NOT re-enter them.
+_REAUTH_SCHEMA = vol.Schema(
+    {
+        vol.Required("username"): str,
         vol.Required("password"): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
     }
 )
@@ -143,6 +157,70 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
             {vol.Required("child_index"): vol.In({str(i): child.name for i, child in enumerate(children)})}
         )
         return self.async_show_form(step_id="pick_child", data_schema=schema)
+
+    # ------------------------------------------------------------------ #
+    # Phase 6 — Reauth flow (AUTH-05, D-01..D-04, RESEARCH Pattern 1).   #
+    # ------------------------------------------------------------------ #
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
+        """HA invokes this when ConfigEntryAuthFailed is raised. Trampoline only.
+
+        Per D-04: trigger is HA-native. We do NOT inspect entry_data here; the
+        real form lives in async_step_reauth_confirm which reads self._get_reauth_entry().
+        """
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """D-01 form: username + password. URL + account_type preserved from entry.data.
+
+        On success: D-02 clears entry.data["session"] so the next async_setup_entry
+        hits the fresh-login branch. D-03 reuses device_name = home-assistant-{entry_id[:8]}.
+        """
+        entry = self._get_reauth_entry()  # HA 2024.10+ helper
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # D-03 — device_name is derived from entry.entry_id which is stable
+            # across reauth, so Pronote sees the same connected device.
+            device_name = f"home-assistant-{entry.entry_id[:8]}"
+            try:
+                await self.hass.async_add_executor_job(
+                    partial(
+                        build_or_resume_client,
+                        entry.data["url"],
+                        entry.data["account_type"],
+                        user_input["username"],
+                        user_input["password"],
+                        None,  # D-02: session=None forces fresh-login branch
+                        device_name,
+                    )
+                )
+            except AuthError:
+                errors["base"] = "invalid_auth"
+            except RateLimitedError:
+                errors["base"] = "ip_suspended"
+            except CommunicationError:
+                errors["base"] = "cannot_connect"
+            except PronoteIntegrationError:
+                errors["base"] = "unknown"
+            else:
+                # D-02 — data_updates= merges, NOT data= which would replace and
+                # lose url/account_type/child_*/device_name (RESEARCH Pitfall #6).
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        "username": user_input["username"],
+                        "password": user_input["password"],
+                        "session": None,
+                    },
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=_REAUTH_SCHEMA,
+            errors=errors,
+            description_placeholders={"child_name": entry.data["child_name"]},
+        )
 
     async def _create_entry(self, child_index: int | None) -> ConfigFlowResult:
         """Resolve child, derive identifier, set unique_id, create entry.
