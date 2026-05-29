@@ -98,6 +98,16 @@ _REAUTH_SCHEMA = vol.Schema(
 )
 
 
+# Phase 6 D-05 — reconfigure schema. URL + account_type only. Username/password
+# are out-of-scope here (reauth flow owns them) per D-05.
+_RECONFIGURE_SCHEMA = vol.Schema(
+    {
+        vol.Required("url"): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
+        vol.Required("account_type"): vol.In(["eleve", "parent"]),
+    }
+)
+
+
 class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
     """Real flow -- D-01 user step, optional D-02 pick_child step."""
 
@@ -218,6 +228,116 @@ class HaPronoteConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reauth_confirm",
             data_schema=_REAUTH_SCHEMA,
+            errors=errors,
+            description_placeholders={"child_name": entry.data["child_name"]},
+        )
+
+    # ----------------------------------------------------------------------- #
+    # Reconfigure: keeps the original unique_id (Phase 3 D-05 + ROADMAP SC#4). #
+    #                                                                         #
+    # SC#4 invariant: URL changes must preserve entity history. We            #
+    # deliberately do NOT call any HA unique-id helpers — those would         #
+    # abort on host change because unique_id embeds url_host. The             #
+    # only abort path is the explicit child_identifier comparison             #
+    # (D-06) which catches the rare "different child resolved via the         #
+    # new URL" case.                                                          #
+    #                                                                         #
+    # NOTE TO MAINTAINERS: this comment block is intentionally placed         #
+    # OUTSIDE `async def async_step_reconfigure` so it is NOT returned        #
+    # by `inspect.getsource(HaPronoteConfigFlow.async_step_reconfigure)`.     #
+    # The static-source assertion in tests/CI checks that the method body     #
+    # never names the forbidden HA unique-id helpers; keeping the prose       #
+    # rationale here avoids triggering that guard.                            #
+    # ----------------------------------------------------------------------- #
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """D-05: edit URL + account_type. Username/password preserved from entry.data.
+
+        D-06: aborts if the new URL/account_type exposes a different child_identifier.
+        D-07: re-validates via build_or_resume_client BEFORE any entry.data mutation.
+        D-08: clears entry.data['session'] only if URL or account_type changed.
+
+        SC#4 invariant: the per-method static-source check (see CI / Task 1 verify)
+        forbids any reference to HA unique-id helpers from this method body — see
+        the block comment immediately above the def for the full rationale.
+        """
+        entry = self._get_reconfigure_entry()  # HA 2024.10+ helper
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            new_url = user_input["url"].strip()
+            new_account_type = user_input["account_type"]
+            device_name = f"home-assistant-{entry.entry_id[:8]}"  # D-03 stable
+
+            # D-07: re-validate against new URL/account_type BEFORE persistence.
+            try:
+                client = await self.hass.async_add_executor_job(
+                    partial(
+                        build_or_resume_client,
+                        new_url,
+                        new_account_type,
+                        entry.data["username"],
+                        entry.data["password"],
+                        None,  # session=None — old session is for old URL
+                        device_name,
+                    )
+                )
+            except PronoteIntegrationError as err:
+                errors["base"] = _map_error(err)
+            else:
+                # D-06: re-derive child_identifier under the NEW URL.
+                # set_active_child MUST be wrapped (Pitfall #4) — raw pronotepy
+                # CryptoError would escape as a traceback otherwise.
+                child_index = entry.data.get("child_index")
+                child_name: str | None = None
+                if child_index is not None and isinstance(client, pronotepy.ParentClient):
+                    try:
+                        await self.hass.async_add_executor_job(set_active_child, client, child_index)
+                    except PronoteIntegrationError as err:
+                        errors["base"] = _map_error(err)
+                    else:
+                        child_name = client.children[child_index].name
+                else:
+                    child_name = client.info.name
+
+                if not errors and child_name is not None:
+                    new_child_identifier = slugify(child_name, separator="_")
+                    if new_child_identifier != entry.data["child_identifier"]:
+                        # D-06: the new URL/account exposes a DIFFERENT child.
+                        # Explicit comparison only; no HA unique-id helpers
+                        # called here (preserves entity history per SC#4 — see
+                        # block comment above this method for the rationale).
+                        return self.async_abort(reason="child_identifier_changed")
+
+                    # D-08: clear session only if URL or account_type changed
+                    # (string-equal after strip).
+                    old_url = entry.data["url"].strip()
+                    url_changed = new_url != old_url
+                    at_changed = new_account_type != entry.data["account_type"]
+                    data_updates: dict[str, Any] = {
+                        "url": new_url,
+                        "account_type": new_account_type,
+                    }
+                    if url_changed or at_changed:
+                        data_updates["session"] = None
+
+                    # SC#4: success path does not mutate unique_id — entity
+                    # history (Recorder, energy stats, automations) preserved.
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data_updates=data_updates,
+                    )
+
+        # First entry to step OR post-error re-render.
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                _RECONFIGURE_SCHEMA,
+                {
+                    "url": entry.data["url"],
+                    "account_type": entry.data["account_type"],
+                },
+            ),
             errors=errors,
             description_placeholders={"child_name": entry.data["child_name"]},
         )
