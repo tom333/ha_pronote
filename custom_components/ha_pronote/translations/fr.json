@@ -20,6 +20,14 @@
         "data": {
           "child_index": "Enfant"
         }
+      },
+      "reauth_confirm": {
+        "title": "Ré-authentification Pronote",
+        "description": "Pronote a rejeté les identifiants enregistrés pour {child_name}. Saisissez l'identifiant et le mot de passe actuels.",
+        "data": {
+          "username": "Identifiant",
+          "password": "Mot de passe"
+        }
       }
     },
     "error": {
@@ -29,7 +37,8 @@
       "unknown": "Une erreur inattendue est survenue."
     },
     "abort": {
-      "already_configured": "Ce compte / enfant Pronote est déjà configuré."
+      "already_configured": "Ce compte / enfant Pronote est déjà configuré.",
+      "reauth_successful": "Ré-authentification réussie — identifiants Pronote mis à jour."
     }
   },
   "entity": {

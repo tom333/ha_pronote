@@ -20,6 +20,14 @@
         "data": {
           "child_index": "Child"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Pronote",
+        "description": "Pronote rejected the stored credentials for {child_name}. Enter the current username and password.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -29,7 +37,8 @@
       "unknown": "An unexpected error occurred."
     },
     "abort": {
-      "already_configured": "This Pronote account / child is already configured."
+      "already_configured": "This Pronote account / child is already configured.",
+      "reauth_successful": "Re-authentication successful — Pronote credentials updated."
     }
   },
   "entity": {
