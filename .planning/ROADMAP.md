@@ -169,7 +169,7 @@ Plans:
 - [x] 06-03-PLAN.md — Reauth flow (D-01..D-04): async_step_reauth + async_step_reauth_confirm + _REAUTH_SCHEMA + i18n keys (EN + FR) + 5 tests (Wave 2, AUTH-05)
 
 **Wave 3** *(blocked on Wave 2 — config_flow.py reconfigure surface; file conflict with 06-03)*
-- [ ] 06-04-PLAN.md — Reconfigure flow (D-05..D-08): async_step_reconfigure + _RECONFIGURE_SCHEMA + set_active_child typed-wrap + child_identifier mismatch abort + i18n keys + 6 tests (Wave 3, AUTH-06)
+- [x] 06-04-PLAN.md — Reconfigure flow (D-05..D-08): async_step_reconfigure + _RECONFIGURE_SCHEMA + set_active_child typed-wrap + child_identifier mismatch abort + i18n keys + 6 tests (Wave 3, AUTH-06)
 
 **Wave 4** *(blocked on Wave 3 — OptionsFlow on top of all read paths + flows)*
 - [ ] 06-05-PLAN.md — OptionsFlow multi-step (D-09..D-16): HaPronoteOptionsFlow(OptionsFlowWithReload) + _POLLING_SCHEMA (9 fields) + _DISPLAY_SCHEMA (2 fields, lambda v: v.strip()) + _options_schema_defaults helper + async_get_options_flow + i18n keys + 7 tests + test_options_change_triggers_reload + test_no_deprecated_add_update_listener_in_production (Wave 4, COORD-03 + OPT-01 + OPT-02 + OPT-03 + OPT-04)
