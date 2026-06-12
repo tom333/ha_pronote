@@ -52,7 +52,7 @@ GRADES_WINDOW: Final = 50
 # D-04: compute_interval branch defaults. D-08: quiet hours default 22h-6h NC.
 # D-11: backoff curve per PITFALLS §2.1. D-18: const wording locked in CONTEXT.md.
 # BLOCKER-3 (checker revision): TROUBLESHOOTING_DOC_URL_BASE consolidates the
-# troubleshooting URL into ONE symbol; coordinator._format_notification builds
+# troubleshooting URL into ONE symbol; coordinator._handle_failure builds
 # kind-specific anchors as f"{BASE}#troubleshooting-{kind}" matching D-15's
 # anchor wording (#troubleshooting-ip-suspended / #troubleshooting-auth-circuit).
 # Phase 7 DIST-07 fills the <placeholder-owner> in this one const, not many call sites.
@@ -81,7 +81,7 @@ NC_LOCAL_HOLIDAYS_SUPPLEMENT: Final[frozenset[date]] = frozenset()
 IP_SUSPENDED_NOTIFICATION_ID_SUFFIX: Final = "ip_suspended"
 AUTH_CIRCUIT_NOTIFICATION_ID_SUFFIX: Final = "auth_circuit"
 # BLOCKER-3 fix: single-source base URL. Phase 7 DIST-07 fills the owner
-# placeholder in this ONE const. coordinator._format_notification builds
+# placeholder in this ONE const. coordinator._handle_failure builds
 # f"{TROUBLESHOOTING_DOC_URL_BASE}#troubleshooting-{kind}" where
 # kind in {"ip-suspended", "auth-circuit"} (hyphen-form per D-15).
 TROUBLESHOOTING_DOC_URL_BASE: Final = "https://github.com/<placeholder-owner>/ha_pronote"

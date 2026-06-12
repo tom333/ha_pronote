@@ -961,7 +961,7 @@ async def test_3_consecutive_auth_failures_set_backoff_4h_and_notification(
     freezer,
 ) -> None:
     """V-08: 3 consecutive AuthError -> _consecutive_failures==3, backoff ~= 4h,
-    _format_notification fired 3 times with auth_circuit kind.
+    auth_circuit Repair Issue raised (deduped by id; DIAG-02).
     """
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
@@ -992,11 +992,6 @@ async def test_3_consecutive_auth_failures_set_backoff_4h_and_notification(
     fresh_client = MagicMock()
     fresh_client.set_child = MagicMock()
     fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
-
-    # Reset the fixture mocks (the first refresh during _setup_coordinator
-    # already invoked _reset_breaker_on_success which fired 2 dismiss calls).
-    mock_persistent_notification.create.reset_mock()
-    mock_persistent_notification.dismiss.reset_mock()
 
     # Three sequential refresh attempts, each: AuthError then AuthError on retry
     # -> ConfigEntryAuthFailed; advance the freezer between calls so the prior
@@ -1039,11 +1034,15 @@ async def test_3_consecutive_auth_failures_set_backoff_4h_and_notification(
         f"3rd strike backoff delta {delta} not within ±{slack} of {expected}"
     )
 
-    # 3 notifications fired, all with auth_circuit kind
-    assert mock_persistent_notification.create.call_count == 3
-    auth_id_suffix = f"{DOMAIN}_{mock_config_entry.entry_id}_auth_circuit"
-    for call in mock_persistent_notification.create.call_args_list:
-        assert call.kwargs["notification_id"] == auth_id_suffix
+    # DIAG-02: 3 strikes raise the (deduped-by-id) auth_circuit Repair Issue —
+    # is_fixable=True, severity ERROR.
+    from homeassistant.helpers import issue_registry as ir
+
+    reg = ir.async_get(hass)
+    issue = reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_auth_circuit")
+    assert issue is not None
+    assert issue.is_fixable is True
+    assert issue.severity == ir.IssueSeverity.ERROR
 
 
 async def test_ip_suspended_triggers_backoff_and_notification(
@@ -1067,8 +1066,6 @@ async def test_ip_suspended_triggers_backoff_and_notification(
     coordinator = await _setup_coordinator(
         hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
     )
-    mock_persistent_notification.create.reset_mock()
-    mock_persistent_notification.dismiss.reset_mock()
 
     with (
         patch(
@@ -1081,12 +1078,16 @@ async def test_ip_suspended_triggers_backoff_and_notification(
 
     assert coordinator._consecutive_failures == 1  # noqa: SLF001
     assert coordinator._backoff_until is not None  # noqa: SLF001
-    assert mock_persistent_notification.create.call_count == 1
-    call = mock_persistent_notification.create.call_args
-    assert call.kwargs["notification_id"] == f"{DOMAIN}_{mock_config_entry.entry_id}_ip_suspended"
-    assert call.kwargs["notification_id"].endswith("_ip_suspended")
-    # default language=en -> "Attempt #1"
-    assert "#1" in call.kwargs["message"] or "N°1" in call.kwargs["message"]
+    # DIAG-02: IP_SUSPENDED raises the ip_suspended Repair Issue — not fixable, WARNING.
+    from homeassistant.helpers import issue_registry as ir
+
+    reg = ir.async_get(hass)
+    issue = reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_ip_suspended")
+    assert issue is not None
+    assert issue.is_fixable is False
+    assert issue.severity == ir.IssueSeverity.WARNING
+    # strike_count placeholder reflects the first strike
+    assert issue.translation_placeholders["strike_count"] == "1"
 
 
 async def test_recovery_resets_breaker_and_dismisses_notification(
@@ -1109,10 +1110,6 @@ async def test_recovery_resets_breaker_and_dismisses_notification(
     coordinator = await _setup_coordinator(
         hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
     )
-    # Reset mocks AFTER setup (first refresh's success already dismissed both)
-    mock_persistent_notification.create.reset_mock()
-    mock_persistent_notification.dismiss.reset_mock()
-
     # Trigger 1 strike via IP_SUSPENDED
     with (
         patch(
@@ -1140,7 +1137,14 @@ async def test_recovery_resets_breaker_and_dismisses_notification(
     assert result is next_snapshot
     assert coordinator._consecutive_failures == 0  # noqa: SLF001
     assert coordinator._backoff_until is None  # noqa: SLF001
-    assert mock_persistent_notification.dismiss.call_count == 2
+    # DIAG-02: a successful poll deletes both breaker Repair Issues.
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.ha_pronote.const import DOMAIN
+
+    reg = ir.async_get(hass)
+    assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_ip_suspended") is None
+    assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_auth_circuit") is None
 
 
 async def test_24h_synthetic_clock_tz_matrix_produces_at_least_5_distinct_intervals(
@@ -1325,17 +1329,20 @@ async def test_notification_body_contains_next_retry_time_and_strike_count(
     snapshot_with_n_lessons_today,
     freezer,
 ) -> None:
-    """V-21: notification body contains retry HH:MM, strike count, redacted err, kind anchor.
+    """V-21: Repair Issue placeholders carry retry HH:MM, strike count, redacted err, kind anchor.
 
-    Force 1 IP_SUSPENDED strike, inspect the IP notification body.
-    Then trigger an auth_circuit notification and assert it contains the
-    `#troubleshooting-auth-circuit` anchor (BLOCKER-3 fix coverage for both kinds).
+    Force 1 IP_SUSPENDED strike, inspect the IP issue's translation_placeholders.
+    Then trigger an auth_circuit strike and assert its help_url placeholder
+    contains the `#troubleshooting-auth-circuit` anchor (BLOCKER-3 coverage for both kinds).
     """
     import re
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
+    from homeassistant.helpers import issue_registry as ir
+
     from custom_components.ha_pronote.api import ErrorReason
+    from custom_components.ha_pronote.const import DOMAIN
 
     t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
     freezer.move_to(t0)
@@ -1343,9 +1350,8 @@ async def test_notification_body_contains_next_retry_time_and_strike_count(
     coordinator = await _setup_coordinator(
         hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
     )
-    mock_persistent_notification.create.reset_mock()
 
-    # IP_SUSPENDED notification — include credential-looking text to verify redact()
+    # IP_SUSPENDED issue — include credential-looking text to verify redact()
     with (
         patch(
             "custom_components.ha_pronote.coordinator.fetch_all",
@@ -1358,25 +1364,25 @@ async def test_notification_body_contains_next_retry_time_and_strike_count(
     ):
         await coordinator._async_update_data()  # noqa: SLF001
 
-    assert mock_persistent_notification.create.call_count == 1
-    kwargs = mock_persistent_notification.create.call_args.kwargs
-    message = kwargs["message"]
+    reg = ir.async_get(hass)
+    issue = reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_ip_suspended")
+    assert issue is not None
+    ph = issue.translation_placeholders
     # HH:MM retry timestamp
-    assert re.search(r"\d{2}:\d{2}", message), f"No HH:MM in message: {message}"
-    # Strike count #1 or N°1 (language-dependent)
-    assert "#1" in message or "N°1" in message, f"No strike count in message: {message}"
+    assert re.search(r"\d{2}:\d{2}", ph["retry_at"]), f"No HH:MM in retry_at: {ph['retry_at']}"
+    # Strike count == 1
+    assert ph["strike_count"] == "1", f"Unexpected strike_count: {ph['strike_count']}"
     # Redaction applied — no raw credential patterns
-    assert "password=hunter2" not in message
-    assert "token=abc123" not in message
-    assert "<redacted>" in message
+    assert "password=hunter2" not in ph["detail"]
+    assert "token=abc123" not in ph["detail"]
+    assert "<redacted>" in ph["detail"]
     # BLOCKER-3: ip_suspended kind anchor
-    assert "#troubleshooting-ip-suspended" in message, f"Missing ip-suspended anchor: {message}"
+    assert "#troubleshooting-ip-suspended" in ph["help_url"], f"Missing ip-suspended anchor: {ph['help_url']}"
 
-    # Now trigger an auth_circuit notification to verify the auth-circuit anchor
+    # Now trigger an auth_circuit strike to verify the auth-circuit anchor
     fresh_client = MagicMock()
     fresh_client.set_child = MagicMock()
     fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
-    mock_persistent_notification.create.reset_mock()
     # Need to clear backoff to allow the auth path to run
     coordinator._backoff_until = None  # noqa: SLF001
     coordinator._last_recovery_at = None  # noqa: SLF001
@@ -1397,10 +1403,10 @@ async def test_notification_body_contains_next_retry_time_and_strike_count(
     ):
         await coordinator._async_update_data()  # noqa: SLF001
 
-    assert mock_persistent_notification.create.call_count == 1
-    auth_kwargs = mock_persistent_notification.create.call_args.kwargs
-    assert "#troubleshooting-auth-circuit" in auth_kwargs["message"], (
-        f"Missing auth-circuit anchor: {auth_kwargs['message']}"
+    auth_issue = reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_auth_circuit")
+    assert auth_issue is not None
+    assert "#troubleshooting-auth-circuit" in auth_issue.translation_placeholders["help_url"], (
+        f"Missing auth-circuit anchor: {auth_issue.translation_placeholders['help_url']}"
     )
 
 
@@ -1557,7 +1563,6 @@ async def test_rate_limited_non_ip_suspended_does_not_tick_breaker(
     coordinator = await _setup_coordinator(
         hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
     )
-    mock_persistent_notification.create.reset_mock()
 
     with (
         patch(
@@ -1570,7 +1575,14 @@ async def test_rate_limited_non_ip_suspended_does_not_tick_breaker(
 
     assert coordinator._consecutive_failures == 0  # noqa: SLF001
     assert coordinator._backoff_until is None  # noqa: SLF001
-    assert mock_persistent_notification.create.call_count == 0
+    # DIAG-02: no breaker Repair Issue raised for a non-IP_SUSPENDED rate-limit.
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.ha_pronote.const import DOMAIN
+
+    reg = ir.async_get(hass)
+    assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_ip_suspended") is None
+    assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_auth_circuit") is None
 
 
 async def test_communication_error_does_not_tick_breaker(
@@ -1591,7 +1603,6 @@ async def test_communication_error_does_not_tick_breaker(
     coordinator = await _setup_coordinator(
         hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
     )
-    mock_persistent_notification.create.reset_mock()
 
     with (
         patch(
@@ -1604,7 +1615,14 @@ async def test_communication_error_does_not_tick_breaker(
 
     assert coordinator._consecutive_failures == 0  # noqa: SLF001
     assert coordinator._backoff_until is None  # noqa: SLF001
-    assert mock_persistent_notification.create.call_count == 0
+    # DIAG-02: a transient CommunicationError raises no breaker Repair Issue.
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.ha_pronote.const import DOMAIN
+
+    reg = ir.async_get(hass)
+    assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_ip_suspended") is None
+    assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_auth_circuit") is None
 
 
 async def test_wr04_aliased_auth_error_does_not_tick_breaker(
@@ -1628,7 +1646,6 @@ async def test_wr04_aliased_auth_error_does_not_tick_breaker(
     coordinator = await _setup_coordinator(
         hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
     )
-    mock_persistent_notification.create.reset_mock()
 
     fresh_client = MagicMock()
     fresh_client.set_child = MagicMock()
@@ -1795,3 +1812,88 @@ async def test_options_change_triggers_reload(
     assert coord_after is not coord_before
     new_options = coord_after._resolve_options()  # noqa: SLF001
     assert new_options.refresh_interval == _timedelta(minutes=15)
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 DIAG-02 — IP-ban surfaces as a Repair Issue (replaces persistent notif).
+# ---------------------------------------------------------------------------
+
+
+async def test_ip_ban_creates_repair_issue(
+    hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today
+) -> None:
+    """RateLimitedError(IP_SUSPENDED) → Repair Issue created (severity WARNING, not fixable)."""
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.ha_pronote.api import ErrorReason, RateLimitedError
+    from custom_components.ha_pronote.const import DOMAIN, IP_SUSPENDED_NOTIFICATION_ID_SUFFIX
+
+    today = _datetime(2026, 5, 7, 14, 0, 0, tzinfo=_ZoneInfo("Pacific/Noumea")).date()
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch("custom_components.ha_pronote.build_or_resume_client", return_value=mock_pronote_client),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        coordinator = mock_config_entry.runtime_data.coordinator
+
+        with patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=RateLimitedError("Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED),
+        ):
+            with pytest.raises(UpdateFailed):
+                await coordinator._async_update_data()  # noqa: SLF001
+
+    reg = ir.async_get(hass)
+    issue_id = f"{mock_config_entry.entry_id}_{IP_SUSPENDED_NOTIFICATION_ID_SUFFIX}"
+    issue = reg.async_get_issue(DOMAIN, issue_id)
+    assert issue is not None
+    assert issue.is_fixable is False
+    assert issue.severity == ir.IssueSeverity.WARNING
+
+
+async def test_successful_poll_clears_ip_ban_issue(
+    hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today
+) -> None:
+    """A later successful poll deletes the IP-ban Repair Issue."""
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.ha_pronote.api import ErrorReason, RateLimitedError
+    from custom_components.ha_pronote.const import DOMAIN, IP_SUSPENDED_NOTIFICATION_ID_SUFFIX
+
+    today = _datetime(2026, 5, 7, 14, 0, 0, tzinfo=_ZoneInfo("Pacific/Noumea")).date()
+    mock_config_entry.add_to_hass(hass)
+    issue_id = f"{mock_config_entry.entry_id}_{IP_SUSPENDED_NOTIFICATION_ID_SUFFIX}"
+    with (
+        patch("custom_components.ha_pronote.build_or_resume_client", return_value=mock_pronote_client),
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=1),
+        ),
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        coordinator = mock_config_entry.runtime_data.coordinator
+
+        with patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=RateLimitedError("Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED),
+        ):
+            with pytest.raises(UpdateFailed):
+                await coordinator._async_update_data()  # noqa: SLF001
+
+        reg = ir.async_get(hass)
+        assert reg.async_get_issue(DOMAIN, issue_id) is not None
+
+        coordinator._backoff_until = None  # noqa: SLF001
+        with patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            return_value=snapshot_with_n_lessons_today(today, n=2),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+    assert reg.async_get_issue(DOMAIN, issue_id) is None
