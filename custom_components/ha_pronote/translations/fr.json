@@ -72,7 +72,7 @@
   "options": {
     "step": {
       "polling": {
-        "title": "Polling",
+        "title": "Interrogation",
         "description": "Fréquence des requêtes Pronote, fenêtres de polling renforcé et heures calmes. Réglages appliqués à {child_name}.",
         "data": {
           "refresh_interval": "Intervalle de rafraîchissement (min)",

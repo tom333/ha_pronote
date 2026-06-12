@@ -20,7 +20,7 @@ from custom_components.ha_pronote.sensor import (
 from homeassistant.components.sensor import SensorStateClass
 from homeassistant.helpers import entity_registry as er
 
-_SENSOR_ENTITY_ID_GUESS = "sensor.jean_dupont_lessons_today"
+_SENSOR_ENTITY_ID_GUESS = "sensor.jean_dupont_cours_du_jour"
 
 
 # ---------------------------------------------------------------------------

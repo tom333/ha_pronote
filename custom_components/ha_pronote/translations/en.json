@@ -2,59 +2,59 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Pronote",
+        "title": "Connexion à Pronote",
         "data": {
-          "url": "Pronote space URL",
-          "account_type": "Account type",
-          "username": "Username",
-          "password": "Password"
+          "url": "URL de votre espace Pronote",
+          "account_type": "Type de compte",
+          "username": "Identifiant",
+          "password": "Mot de passe"
         },
         "data_description": {
-          "url": "Full URL of your Pronote space (e.g. https://0123456a.index-education.net/pronote/eleve.html).",
-          "account_type": "'eleve' for the student's account, 'parent' for the parent portal."
+          "url": "URL complète de votre espace Pronote (ex : https://0123456a.index-education.net/pronote/eleve.html).",
+          "account_type": "'eleve' pour le compte élève, 'parent' pour le portail parent."
         }
       },
       "pick_child": {
-        "title": "Select child",
-        "description": "Your Pronote account has multiple children. Choose which one to add. To add another child, run the integration setup again.",
+        "title": "Sélectionner un enfant",
+        "description": "Votre compte Pronote regroupe plusieurs enfants. Choisissez celui à ajouter. Pour en ajouter un autre, relancez la configuration.",
         "data": {
-          "child_index": "Child"
+          "child_index": "Enfant"
         }
       },
       "reauth_confirm": {
-        "title": "Re-authenticate Pronote",
-        "description": "Pronote rejected the stored credentials for {child_name}. Enter the current username and password.",
+        "title": "Ré-authentification Pronote",
+        "description": "Pronote a rejeté les identifiants enregistrés pour {child_name}. Saisissez l'identifiant et le mot de passe actuels.",
         "data": {
-          "username": "Username",
-          "password": "Password"
+          "username": "Identifiant",
+          "password": "Mot de passe"
         }
       },
       "reconfigure": {
-        "title": "Change Pronote URL or account type",
-        "description": "Edit the Pronote space URL or account type for {child_name}. Username and password stay the same.",
+        "title": "Modifier l'URL ou le type de compte Pronote",
+        "description": "Modifiez l'URL de l'espace Pronote ou le type de compte pour {child_name}. L'identifiant et le mot de passe restent inchangés.",
         "data": {
-          "url": "Pronote space URL",
-          "account_type": "Account type"
+          "url": "URL de votre espace Pronote",
+          "account_type": "Type de compte"
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials. Check your username and password.",
-      "cannot_connect": "Cannot reach Pronote. Check the URL and your network.",
-      "ip_suspended": "Your IP address has been temporarily suspended by Pronote. Wait a few minutes before retrying.",
-      "unknown": "An unexpected error occurred."
+      "invalid_auth": "Identifiants invalides. Vérifiez votre identifiant et votre mot de passe.",
+      "cannot_connect": "Impossible de joindre Pronote. Vérifiez l'URL et votre connexion réseau.",
+      "ip_suspended": "Votre IP a été suspendue temporairement par Pronote. Patientez quelques minutes avant de réessayer.",
+      "unknown": "Une erreur inattendue est survenue."
     },
     "abort": {
-      "already_configured": "This Pronote account / child is already configured.",
-      "reauth_successful": "Re-authentication successful — Pronote credentials updated.",
-      "reconfigure_successful": "Configuration successful — Pronote settings updated.",
-      "child_identifier_changed": "The new URL or account exposes a different child. Delete this entry and re-add it to track the new child."
+      "already_configured": "Ce compte / enfant Pronote est déjà configuré.",
+      "reauth_successful": "Ré-authentification réussie — identifiants Pronote mis à jour.",
+      "reconfigure_successful": "Configuration réussie — paramètres Pronote mis à jour.",
+      "child_identifier_changed": "La nouvelle URL ou le nouveau compte expose un enfant différent. Supprimez cette entrée et recréez-la pour suivre le nouvel enfant."
     }
   },
   "entity": {
     "sensor": {
       "lessons_today": {
-        "name": "Lessons today"
+        "name": "Cours du jour"
       },
       "grades": {
         "name": "Notes"
@@ -72,46 +72,46 @@
   "options": {
     "step": {
       "polling": {
-        "title": "Polling",
-        "description": "How often HA-Pronote queries Pronote, when to poll more frequently, and when to stay quiet. Settings apply to {child_name}.",
+        "title": "Interrogation",
+        "description": "Fréquence des requêtes Pronote, fenêtres de polling renforcé et heures calmes. Réglages appliqués à {child_name}.",
         "data": {
-          "refresh_interval": "Refresh interval (min)",
-          "adaptive_polling_enabled": "Tighten polling 17h–20h on school evenings",
-          "afternoon_interval": "Afternoon refresh interval (min)",
-          "afternoon_window_start": "Afternoon tightening starts",
-          "afternoon_window_end": "Afternoon tightening ends",
-          "suspended_cadence": "Suspended cadence (weekends, vacations) (min)",
-          "quiet_cadence": "Night quiet cadence (min)",
-          "quiet_hours_start": "Quiet hours start",
-          "quiet_hours_end": "Quiet hours end"
+          "refresh_interval": "Intervalle de rafraîchissement (min)",
+          "adaptive_polling_enabled": "Resserrer le polling 17h–20h les soirs d'école",
+          "afternoon_interval": "Intervalle après-midi (min)",
+          "afternoon_window_start": "Début fenêtre après-midi",
+          "afternoon_window_end": "Fin fenêtre après-midi",
+          "suspended_cadence": "Cadence en suspension (week-ends, vacances) (min)",
+          "quiet_cadence": "Cadence heures calmes (nuit) (min)",
+          "quiet_hours_start": "Début heures calmes",
+          "quiet_hours_end": "Fin heures calmes"
         }
       },
       "display": {
-        "title": "Display",
-        "description": "Optional per-child nickname and school timezone for {child_name}.",
+        "title": "Affichage",
+        "description": "Surnom optionnel et fuseau horaire pour {child_name}.",
         "data": {
-          "nickname": "Child nickname (display only)",
-          "school_tz": "School timezone (IANA, e.g. Pacific/Noumea or Europe/Paris)"
+          "nickname": "Surnom de l'enfant (affichage uniquement)",
+          "school_tz": "Fuseau horaire scolaire (IANA, ex. Pacific/Noumea ou Europe/Paris)"
         }
       }
     },
     "error": {
-      "invalid_school_tz": "Unknown timezone. Use an IANA name like Pacific/Noumea or Europe/Paris."
+      "invalid_school_tz": "Fuseau horaire inconnu. Utilisez un nom IANA comme Pacific/Noumea ou Europe/Paris."
     }
   },
   "issues": {
     "ip_suspended": {
-      "title": "Pronote suspended your IP address",
-      "description": "The Pronote server temporarily suspended this Home Assistant instance's IP (attempt #{strike_count}). Next retry at {retry_at}. If this recurs, increase your polling interval in the integration options. Technical detail: {detail}. Help: {help_url}"
+      "title": "Pronote a suspendu votre adresse IP",
+      "description": "Le serveur Pronote a temporairement suspendu l'IP de cette instance Home Assistant (tentative N°{strike_count}). Prochaine tentative à {retry_at}. Si cela se reproduit, augmentez votre intervalle de polling dans les options de l'intégration. Détail technique : {detail}. Aide : {help_url}"
     },
     "auth_circuit": {
-      "title": "Pronote rejected your credentials",
-      "description": "Authentication has failed repeatedly (attempt #{strike_count}). Next retry at {retry_at}. If your Pronote password changed, re-authenticate. Technical detail: {detail}. Help: {help_url}",
+      "title": "Pronote a rejeté vos identifiants",
+      "description": "L'authentification a échoué plusieurs fois (tentative N°{strike_count}). Prochaine tentative à {retry_at}. Si votre mot de passe Pronote a changé, ré-authentifiez-vous. Détail technique : {detail}. Aide : {help_url}",
       "fix_flow": {
         "step": {
           "confirm": {
-            "title": "Re-authenticate Pronote",
-            "description": "Launch the re-authentication flow to enter your current Pronote credentials for {child_name}."
+            "title": "Ré-authentification Pronote",
+            "description": "Lancez la procédure de ré-authentification pour saisir vos identifiants Pronote actuels pour {child_name}."
           }
         }
       }
