@@ -108,5 +108,23 @@
     "error": {
       "invalid_school_tz": "Fuseau horaire inconnu. Utilisez un nom IANA comme Pacific/Noumea ou Europe/Paris."
     }
+  },
+  "issues": {
+    "ip_suspended": {
+      "title": "Pronote a suspendu votre adresse IP",
+      "description": "Le serveur Pronote a temporairement suspendu l'IP de cette instance Home Assistant (tentative N°{strike_count}). Prochaine tentative à {retry_at}. Si cela se reproduit, augmentez votre intervalle de polling dans les options de l'intégration. Détail technique : {detail}. Aide : {help_url}"
+    },
+    "auth_circuit": {
+      "title": "Pronote a rejeté vos identifiants",
+      "description": "L'authentification a échoué plusieurs fois (tentative N°{strike_count}). Prochaine tentative à {retry_at}. Si votre mot de passe Pronote a changé, ré-authentifiez-vous. Détail technique : {detail}. Aide : {help_url}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Ré-authentification Pronote",
+            "description": "Lancez la procédure de ré-authentification pour saisir vos identifiants Pronote actuels pour {child_name}."
+          }
+        }
+      }
+    }
   }
 }

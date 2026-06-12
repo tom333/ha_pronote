@@ -108,5 +108,23 @@
     "error": {
       "invalid_school_tz": "Unknown timezone. Use an IANA name like Pacific/Noumea or Europe/Paris."
     }
+  },
+  "issues": {
+    "ip_suspended": {
+      "title": "Pronote suspended your IP address",
+      "description": "The Pronote server temporarily suspended this Home Assistant instance's IP (attempt #{strike_count}). Next retry at {retry_at}. If this recurs, increase your polling interval in the integration options. Technical detail: {detail}. Help: {help_url}"
+    },
+    "auth_circuit": {
+      "title": "Pronote rejected your credentials",
+      "description": "Authentication has failed repeatedly (attempt #{strike_count}). Next retry at {retry_at}. If your Pronote password changed, re-authenticate. Technical detail: {detail}. Help: {help_url}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Re-authenticate Pronote",
+            "description": "Launch the re-authentication flow to enter your current Pronote credentials for {child_name}."
+          }
+        }
+      }
+    }
   }
 }
