@@ -69,16 +69,6 @@
       }
     }
   },
-  "notification": {
-    "ip_suspended": {
-      "title": "[HA-Pronote] IP suspendue par Pronote",
-      "message": "L'IP de votre instance Home Assistant a été suspendue par le serveur Pronote. Voir la notification persistante pour le détail et les instructions."
-    },
-    "auth_circuit": {
-      "title": "[HA-Pronote] Identifiants Pronote rejetés",
-      "message": "Plusieurs tentatives d'authentification ont échoué. Voir la notification persistante pour les instructions de ré-authentification."
-    }
-  },
   "options": {
     "step": {
       "polling": {
