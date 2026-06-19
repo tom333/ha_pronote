@@ -104,7 +104,7 @@ _LOGGER = logging.getLogger(__name__)
 class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
     """One coordinator per ConfigEntry. Polls Pronote on a 30-min cadence (D-19, D-24)."""
 
-    def __init__(  # noqa: PLR0913 — coordinator wires entry + client + child + tz from __init__.py
+    def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,

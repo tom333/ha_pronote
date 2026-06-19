@@ -15,9 +15,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-import homeassistant.util.dt as dt_util
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.util import slugify  # D-09 uid contract — HA slugify, NOT python-slugify
+import homeassistant.util.dt as dt_util
 
 from .entity import PronoteEntity
 
@@ -67,7 +67,7 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
         Returns None when no future lesson exists in the J-7→J+14 window.
         """
         now = dt_util.now()
-        for lesson in sorted(self.coordinator.data.lessons, key=lambda l: l.start):
+        for lesson in sorted(self.coordinator.data.lessons, key=lambda lesson: lesson.start):
             if lesson.end > now:
                 return self._lesson_to_event(lesson)
         return None

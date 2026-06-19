@@ -704,7 +704,7 @@ async def test_options_invalid_school_tz_shows_form_error(hass, mock_pronote_cli
     ],
     ids=["empty", "whitespace", "truthy", "stripped"],
 )
-async def test_options_nickname_strip_and_title_update(  # noqa: PLR0913
+async def test_options_nickname_strip_and_title_update(
     hass,
     mock_pronote_client,
     nickname_input,

@@ -30,6 +30,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pronotepy
+
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -73,12 +74,9 @@ class PronoteEntity(CoordinatorEntity["PronoteDataUpdateCoordinator"]):
         client = self._entry.runtime_data.client
         if isinstance(client, pronotepy.ParentClient):
             child_index = self._entry.runtime_data.child_index
-            if child_index is not None:
-                info_obj = client.children[child_index]
-            else:
-                # Fallback: parent client must have a child_index per Phase 3 D-08,
-                # but if absent (corrupted entry), fall back to parent info (returns "").
-                info_obj = client.info
+            # Fallback: parent client must have a child_index per Phase 3 D-08,
+            # but if absent (corrupted entry), fall back to parent info (returns "").
+            info_obj = client.children[child_index] if child_index is not None else client.info
         else:
             info_obj = client.info
         class_label = getattr(info_obj, CLASS_LEVEL_ATTR, None) or None  # "" -> None

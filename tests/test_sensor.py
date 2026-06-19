@@ -11,13 +11,7 @@ import pytest
 from custom_components.ha_pronote.api import CommunicationError
 from custom_components.ha_pronote.api.models import Grade, Information, Snapshot
 from custom_components.ha_pronote.const import DOMAIN
-from custom_components.ha_pronote.sensor import (
-    PronoteGradesSensor,
-    PronoteLessonsTodaySensor,
-    PronoteNotificationsSensor,
-    _to_float,
-)
-from homeassistant.components.sensor import SensorStateClass
+from custom_components.ha_pronote.sensor import _to_float
 from homeassistant.helpers import entity_registry as er
 
 _SENSOR_ENTITY_ID_GUESS = "sensor.jean_dupont_cours_du_jour"
@@ -284,13 +278,13 @@ async def test_device_info_model_for_parent_client(
     PHASE-4-PROBE-NOTES.md STEP 11: client.info.class_name == "" for parent;
     child's class lives in client.children[child_index].class_name.
     """
+    from unittest.mock import MagicMock
+
     import pronotepy
-    from homeassistant.helpers import device_registry as dr
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.ha_pronote.const import DOMAIN
-
-    from unittest.mock import MagicMock
+    from homeassistant.helpers import device_registry as dr
 
     today = date(2026, 5, 7)
 
@@ -875,6 +869,7 @@ async def test_device_info_nickname_fallback(
     from datetime import date
 
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+
     from custom_components.ha_pronote.const import DOMAIN
 
     options = {} if nickname_value is None else {"nickname": nickname_value}

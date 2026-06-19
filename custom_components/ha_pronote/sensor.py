@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 
+from .const import GRADE_COMMENT_MAX_LEN, GRADES_WINDOW, NOTIFICATIONS_WINDOW
 from .entity import PronoteEntity
 
 if TYPE_CHECKING:
@@ -97,10 +98,12 @@ class PronoteLessonsTodaySensor(PronoteEntity, SensorEntity):
         """
         return {
             "lessons_today": [
-                lesson.to_dict() for lesson in sorted(self.coordinator.data.lessons_today, key=lambda l: l.start)
+                lesson.to_dict()
+                for lesson in sorted(self.coordinator.data.lessons_today, key=lambda lesson: lesson.start)
             ],
             "lessons_tomorrow": [
-                lesson.to_dict() for lesson in sorted(self.coordinator.data.lessons_tomorrow, key=lambda l: l.start)
+                lesson.to_dict()
+                for lesson in sorted(self.coordinator.data.lessons_tomorrow, key=lambda lesson: lesson.start)
             ],
         }
 
@@ -150,8 +153,6 @@ class PronoteGradesSensor(PronoteEntity, SensorEntity):
         comment capped at GRADE_COMMENT_MAX_LEN chars (T-04-2 mitigation — D-04).
         float values use _to_float() (comma-to-dot normalisation).
         """
-        from .const import GRADE_COMMENT_MAX_LEN, GRADES_WINDOW
-
         data = self.coordinator.data
         # D-06: newest first. D-04 (UAT-revised): cap at GRADES_WINDOW so the
         # 9-field schema fits under the 16 KiB recorder cap on heavy fixtures.
@@ -204,8 +205,6 @@ class PronoteNotificationsSensor(PronoteEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         """D-05/D-06: 20 most recent informations, sorted by date desc."""
-        from .const import NOTIFICATIONS_WINDOW
-
         infos = sorted(
             self.coordinator.data.information,
             key=lambda i: i.date,

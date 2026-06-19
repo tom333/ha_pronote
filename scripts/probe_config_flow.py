@@ -26,9 +26,9 @@ from __future__ import annotations
 
 import inspect
 import json
+from pathlib import Path
 import sys
 import uuid as uuid_lib
-from pathlib import Path
 
 import pronotepy
 

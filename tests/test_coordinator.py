@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import date, datetime as _datetime, timedelta as _timedelta
 import time
 from unittest.mock import MagicMock, patch
@@ -651,11 +652,7 @@ async def test_no_events_on_first_poll(
     snap1 = snapshot_with_n_lessons_today(today, n=3)
 
     events_fired: list = []
-    from custom_components.ha_pronote.const import (
-        EVENT_NEW_GRADE,
-        EVENT_NEW_INFORMATION,
-        EVENT_SCHEDULE_CHANGED,
-    )
+    from custom_components.ha_pronote.const import EVENT_NEW_GRADE, EVENT_NEW_INFORMATION, EVENT_SCHEDULE_CHANGED
 
     hass.bus.async_listen(EVENT_SCHEDULE_CHANGED, lambda e: events_fired.append(("schedule", e)))
     hass.bus.async_listen(EVENT_NEW_GRADE, lambda e: events_fired.append(("grade", e)))
@@ -857,11 +854,7 @@ async def test_event_payload_contains_child_context(
     from zoneinfo import ZoneInfo
 
     from custom_components.ha_pronote.api.models import Grade, Information, Lesson, Snapshot
-    from custom_components.ha_pronote.const import (
-        EVENT_NEW_GRADE,
-        EVENT_NEW_INFORMATION,
-        EVENT_SCHEDULE_CHANGED,
-    )
+    from custom_components.ha_pronote.const import EVENT_NEW_GRADE, EVENT_NEW_INFORMATION, EVENT_SCHEDULE_CHANGED
 
     today = date(2026, 5, 10)
     tz = ZoneInfo("Pacific/Noumea")
@@ -966,11 +959,7 @@ async def test_3_consecutive_auth_failures_set_backoff_4h_and_notification(
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
 
-    from custom_components.ha_pronote.const import (
-        BACKOFF_SCHEDULE,
-        DOMAIN,
-        JITTER_SECONDS,
-    )
+    from custom_components.ha_pronote.const import BACKOFF_SCHEDULE, DOMAIN, JITTER_SECONDS
 
     # Plan 05-04 Task 2 — Hypothesis 0 fix: re-anchor t0 to Mon 2026-05-18 so the
     # 24h stride in the strike loop below lands on Tue/Wed/Thu — all school days,
@@ -1138,9 +1127,8 @@ async def test_recovery_resets_breaker_and_dismisses_notification(
     assert coordinator._consecutive_failures == 0  # noqa: SLF001
     assert coordinator._backoff_until is None  # noqa: SLF001
     # DIAG-02: a successful poll deletes both breaker Repair Issues.
-    from homeassistant.helpers import issue_registry as ir
-
     from custom_components.ha_pronote.const import DOMAIN
+    from homeassistant.helpers import issue_registry as ir
 
     reg = ir.async_get(hass)
     assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_ip_suspended") is None
@@ -1208,11 +1196,7 @@ async def test_168h_synthetic_week_tz_matrix_zero_events_during_quiet_hours(
     from zoneinfo import ZoneInfo
 
     from custom_components.ha_pronote.api.models import Lesson, Snapshot
-    from custom_components.ha_pronote.const import (
-        EVENT_NEW_GRADE,
-        EVENT_NEW_INFORMATION,
-        EVENT_SCHEDULE_CHANGED,
-    )
+    from custom_components.ha_pronote.const import EVENT_NEW_GRADE, EVENT_NEW_INFORMATION, EVENT_SCHEDULE_CHANGED
 
     tz = ZoneInfo("Pacific/Noumea")
     monday = datetime(2026, 5, 11, 0, 0, tzinfo=tz)  # Monday midnight
@@ -1260,14 +1244,14 @@ async def test_168h_synthetic_week_tz_matrix_zero_events_during_quiet_hours(
         )
         new_snap = Snapshot(today=d, school_tz="Pacific/Noumea", lessons=[lesson])
         before = len(events_at_quiet_hours)
-        with patch(
-            "custom_components.ha_pronote.coordinator.fetch_all",
-            return_value=new_snap,
-        ):
-            try:
-                await coordinator._async_update_data()  # noqa: SLF001
-            except Exception:  # noqa: BLE001 — never abort the loop on a stub failure
-                pass
+        with (
+            patch(
+                "custom_components.ha_pronote.coordinator.fetch_all",
+                return_value=new_snap,
+            ),
+            contextlib.suppress(Exception),
+        ):  # never abort the loop on a stub failure
+            await coordinator._async_update_data()  # noqa: SLF001
         await hass.async_block_till_done()
         delta_events = events_at_quiet_hours[before:]
         if is_quiet:
@@ -1283,13 +1267,10 @@ async def test_async_update_data_skip_executor_during_suspension(
     freezer,
 ) -> None:
     """V-20: should_poll=False on Saturday morning -> executor NOT called, data unchanged."""
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from zoneinfo import ZoneInfo
 
-    from custom_components.ha_pronote.const import (
-        DEFAULT_SUSPENDED_CADENCE,
-        JITTER_SECONDS,
-    )
+    from custom_components.ha_pronote.const import DEFAULT_SUSPENDED_CADENCE, JITTER_SECONDS
 
     # First refresh on a Tuesday afternoon (school day) so self.data is populated
     tuesday = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
@@ -1335,14 +1316,13 @@ async def test_notification_body_contains_next_retry_time_and_strike_count(
     Then trigger an auth_circuit strike and assert its help_url placeholder
     contains the `#troubleshooting-auth-circuit` anchor (BLOCKER-3 coverage for both kinds).
     """
-    import re
     from datetime import datetime
+    import re
     from zoneinfo import ZoneInfo
-
-    from homeassistant.helpers import issue_registry as ir
 
     from custom_components.ha_pronote.api import ErrorReason
     from custom_components.ha_pronote.const import DOMAIN
+    from homeassistant.helpers import issue_registry as ir
 
     t0 = datetime(2026, 5, 12, 14, 0, tzinfo=ZoneInfo("Pacific/Noumea"))
     freezer.move_to(t0)
@@ -1462,15 +1442,11 @@ async def test_quiet_hours_atomic_event_gate_suppresses_all_events(
     even when the gate suppresses events — the next non-quiet poll will diff against
     the freshly-mutated baseline.
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from zoneinfo import ZoneInfo
 
     from custom_components.ha_pronote.api.models import Grade, Information, Lesson, Snapshot
-    from custom_components.ha_pronote.const import (
-        EVENT_NEW_GRADE,
-        EVENT_NEW_INFORMATION,
-        EVENT_SCHEDULE_CHANGED,
-    )
+    from custom_components.ha_pronote.const import EVENT_NEW_GRADE, EVENT_NEW_INFORMATION, EVENT_SCHEDULE_CHANGED
 
     tz = ZoneInfo("Pacific/Noumea")
     # First refresh on a non-quiet time (Tue 14h) so self.data is populated
@@ -1576,9 +1552,8 @@ async def test_rate_limited_non_ip_suspended_does_not_tick_breaker(
     assert coordinator._consecutive_failures == 0  # noqa: SLF001
     assert coordinator._backoff_until is None  # noqa: SLF001
     # DIAG-02: no breaker Repair Issue raised for a non-IP_SUSPENDED rate-limit.
-    from homeassistant.helpers import issue_registry as ir
-
     from custom_components.ha_pronote.const import DOMAIN
+    from homeassistant.helpers import issue_registry as ir
 
     reg = ir.async_get(hass)
     assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_ip_suspended") is None
@@ -1616,9 +1591,8 @@ async def test_communication_error_does_not_tick_breaker(
     assert coordinator._consecutive_failures == 0  # noqa: SLF001
     assert coordinator._backoff_until is None  # noqa: SLF001
     # DIAG-02: a transient CommunicationError raises no breaker Repair Issue.
-    from homeassistant.helpers import issue_registry as ir
-
     from custom_components.ha_pronote.const import DOMAIN
+    from homeassistant.helpers import issue_registry as ir
 
     reg = ir.async_get(hass)
     assert reg.async_get_issue(DOMAIN, f"{mock_config_entry.entry_id}_ip_suspended") is None
@@ -1823,10 +1797,9 @@ async def test_ip_ban_creates_repair_issue(
     hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today
 ) -> None:
     """RateLimitedError(IP_SUSPENDED) → Repair Issue created (severity WARNING, not fixable)."""
-    from homeassistant.helpers import issue_registry as ir
-
     from custom_components.ha_pronote.api import ErrorReason, RateLimitedError
     from custom_components.ha_pronote.const import DOMAIN, IP_SUSPENDED_NOTIFICATION_ID_SUFFIX
+    from homeassistant.helpers import issue_registry as ir
 
     today = _datetime(2026, 5, 7, 14, 0, 0, tzinfo=_ZoneInfo("Pacific/Noumea")).date()
     mock_config_entry.add_to_hass(hass)
@@ -1841,12 +1814,14 @@ async def test_ip_ban_creates_repair_issue(
         await hass.async_block_till_done()
         coordinator = mock_config_entry.runtime_data.coordinator
 
-        with patch(
-            "custom_components.ha_pronote.coordinator.fetch_all",
-            side_effect=RateLimitedError("Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED),
+        with (
+            patch(
+                "custom_components.ha_pronote.coordinator.fetch_all",
+                side_effect=RateLimitedError("Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED),
+            ),
+            pytest.raises(UpdateFailed),
         ):
-            with pytest.raises(UpdateFailed):
-                await coordinator._async_update_data()  # noqa: SLF001
+            await coordinator._async_update_data()  # noqa: SLF001
 
     reg = ir.async_get(hass)
     issue_id = f"{mock_config_entry.entry_id}_{IP_SUSPENDED_NOTIFICATION_ID_SUFFIX}"
@@ -1860,10 +1835,9 @@ async def test_successful_poll_clears_ip_ban_issue(
     hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today
 ) -> None:
     """A later successful poll deletes the IP-ban Repair Issue."""
-    from homeassistant.helpers import issue_registry as ir
-
     from custom_components.ha_pronote.api import ErrorReason, RateLimitedError
     from custom_components.ha_pronote.const import DOMAIN, IP_SUSPENDED_NOTIFICATION_ID_SUFFIX
+    from homeassistant.helpers import issue_registry as ir
 
     today = _datetime(2026, 5, 7, 14, 0, 0, tzinfo=_ZoneInfo("Pacific/Noumea")).date()
     mock_config_entry.add_to_hass(hass)
@@ -1879,12 +1853,14 @@ async def test_successful_poll_clears_ip_ban_issue(
         await hass.async_block_till_done()
         coordinator = mock_config_entry.runtime_data.coordinator
 
-        with patch(
-            "custom_components.ha_pronote.coordinator.fetch_all",
-            side_effect=RateLimitedError("Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED),
+        with (
+            patch(
+                "custom_components.ha_pronote.coordinator.fetch_all",
+                side_effect=RateLimitedError("Your IP address is suspended", reason=ErrorReason.IP_SUSPENDED),
+            ),
+            pytest.raises(UpdateFailed),
         ):
-            with pytest.raises(UpdateFailed):
-                await coordinator._async_update_data()  # noqa: SLF001
+            await coordinator._async_update_data()  # noqa: SLF001
 
         reg = ir.async_get(hass)
         assert reg.async_get_issue(DOMAIN, issue_id) is not None

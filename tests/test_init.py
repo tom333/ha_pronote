@@ -72,9 +72,8 @@ def test_phase4_const_values() -> None:
     These values are burned into HA automations — a string drift is a breaking change.
     Phase 4 threat model T-04-04b: values are Final; this test locks them.
     """
-    from homeassistant.const import Platform
-
     from custom_components.ha_pronote import const
+    from homeassistant.const import Platform
 
     assert const.EVENT_SCHEDULE_CHANGED == "pronote_schedule_changed"
     assert const.EVENT_NEW_GRADE == "pronote_new_grade"
@@ -121,6 +120,7 @@ async def test_async_setup_entry_school_tz_override_takes_effect(hass, mock_pron
     from zoneinfo import ZoneInfo
 
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+
     from custom_components.ha_pronote.const import DOMAIN
 
     entry = MockConfigEntry(
@@ -157,6 +157,7 @@ async def test_async_setup_entry_school_tz_invalid_raises_zoneinfo_error(hass, m
     internally, logs the traceback, and transitions the entry to SETUP_ERROR.
     """
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+
     from custom_components.ha_pronote.const import DOMAIN
 
     entry = MockConfigEntry(
@@ -182,7 +183,7 @@ async def test_async_setup_entry_school_tz_invalid_raises_zoneinfo_error(hass, m
     ):
         # HA catches ZoneInfoNotFoundError internally when async_setup runs the
         # coroutine; the public surface is entry.state.
-        result = await hass.config_entries.async_setup(entry.entry_id)
+        await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
     # Setup must NOT succeed (no silent fallback).
     # Per HA semantics, an uncaught exception in async_setup_entry → SETUP_ERROR

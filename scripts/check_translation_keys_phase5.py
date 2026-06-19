@@ -12,9 +12,8 @@ Exits 0 on parity, 1 on mismatch with a sorted diff.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
-
+import sys
 
 EN = Path("custom_components/ha_pronote/translations/en.json")
 FR = Path("custom_components/ha_pronote/translations/fr.json")

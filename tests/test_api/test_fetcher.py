@@ -29,7 +29,7 @@ def _fake_subject(name: str) -> SimpleNamespace:
 
 
 class _FakeLesson:
-    def __init__(  # noqa: PLR0913 — test fake mirrors pronotepy's wide Lesson surface
+    def __init__(
         self,
         start: datetime,
         end: datetime,
@@ -65,7 +65,7 @@ class _FakeGrade:
 
 
 class _FakeInfo:
-    def __init__(  # noqa: PLR0913 — test fake mirrors pronotepy's Information surface
+    def __init__(
         self,
         info_id: str = "i1",
         title: str = "t",

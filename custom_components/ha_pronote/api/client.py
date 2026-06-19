@@ -5,8 +5,8 @@ Caller (Phase 3 coordinator) wraps each call in ``hass.async_add_executor_job(pa
 
 from __future__ import annotations
 
-import uuid as uuid_lib
 from typing import Any, Literal
+import uuid as uuid_lib
 
 import pronotepy
 
@@ -68,7 +68,7 @@ def build_client(
         raise CommunicationError(redact(str(err))) from err  # WR-05
 
 
-def build_or_resume_client(  # noqa: PLR0913 — signature locked by plan 03-02 (url + auth quad + session + device_name)
+def build_or_resume_client(
     url: str,
     account_type: AccountType,
     username: str,

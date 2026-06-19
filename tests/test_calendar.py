@@ -24,7 +24,6 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from custom_components.ha_pronote.api.models import Lesson, Snapshot
-from custom_components.ha_pronote.const import DOMAIN
 
 _TZ = ZoneInfo("Pacific/Noumea")
 

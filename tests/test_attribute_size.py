@@ -30,7 +30,7 @@ MAX_ATTRS_BYTES = 16384  # 16 KiB exactly
 
 
 @pytest.mark.parametrize(
-    "sensor_cls,entity_id_fragment",
+    ("sensor_cls", "entity_id_fragment"),
     [
         (PronoteLessonsTodaySensor, "cours_du_jour"),
         (PronoteGradesSensor, "notes"),

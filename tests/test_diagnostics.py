@@ -7,9 +7,7 @@ import json
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ha_pronote.const import DOMAIN
-from custom_components.ha_pronote.diagnostics import (
-    async_get_config_entry_diagnostics,
-)
+from custom_components.ha_pronote.diagnostics import async_get_config_entry_diagnostics
 
 _ENTRY_DATA = {
     "url": "https://example.com/pronote/eleve.html",

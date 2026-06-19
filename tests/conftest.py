@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from datetime import date, datetime
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
@@ -12,10 +12,9 @@ import pronotepy
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.setup import async_setup_component
-
 from custom_components.ha_pronote.api.models import Lesson, Snapshot
 from custom_components.ha_pronote.const import DOMAIN
+from homeassistant.setup import async_setup_component
 
 
 @pytest.fixture(autouse=True)
@@ -41,7 +40,6 @@ async def setup_ha_calendar_http_dependency(hass, request):
     """
     if "hass" in request.fixturenames and "no_ha_http" not in request.keywords:
         await async_setup_component(hass, "http", {})
-    yield
 
 
 # Phase 3 additions — HA-side test fixtures (C-05). MagicMock at the
