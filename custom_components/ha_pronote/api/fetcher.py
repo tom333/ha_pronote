@@ -90,7 +90,7 @@ def fetch_all(
                 period_name = str(getattr(client.current_period, "name", "") or "")
             else:
                 raw_grades = []
-        except (KeyError, AttributeError):
+        except KeyError, AttributeError:
             # Pronote may not expose grades on this account/period (parent
             # accounts before grades publication, schema gaps in pronotepy
             # 2.14.6 — observed during 02-02 spike: KeyError 'listeDevoirs'
@@ -119,8 +119,8 @@ def fetch_all(
         lessons=[_lesson_from_raw(item, school_tz) for item in raw_lessons],
         grades=[_grade_from_raw(item) for item in raw_grades],
         information=[_info_from_raw(item, school_tz) for item in raw_info],
-        overall_average=overall_avg,   # Phase 4 — fetched in executor alongside grades
-        period_name=period_name,       # Phase 4
+        overall_average=overall_avg,  # Phase 4 — fetched in executor alongside grades
+        period_name=period_name,  # Phase 4
     )
 
 
@@ -174,10 +174,10 @@ def _grade_from_raw(raw: Any) -> Grade:
         out_of=str(raw.out_of) if raw.out_of is not None else "",
         coefficient=str(raw.coefficient) if raw.coefficient is not None else "",
         date=raw.date,
-        class_average=str(getattr(raw, "average", None) or ""),   # Phase 4 — pronotepy attr "average"
-        class_min=str(getattr(raw, "min", None) or ""),           # Phase 4 — pronotepy attr "min"
-        class_max=str(getattr(raw, "max", None) or ""),           # Phase 4 — pronotepy attr "max"
-        comment=str(getattr(raw, "comment", None) or ""),         # Phase 4 — empty/None → ""
+        class_average=str(getattr(raw, "average", None) or ""),  # Phase 4 — pronotepy attr "average"
+        class_min=str(getattr(raw, "min", None) or ""),  # Phase 4 — pronotepy attr "min"
+        class_max=str(getattr(raw, "max", None) or ""),  # Phase 4 — pronotepy attr "max"
+        comment=str(getattr(raw, "comment", None) or ""),  # Phase 4 — empty/None → ""
     )
 
 

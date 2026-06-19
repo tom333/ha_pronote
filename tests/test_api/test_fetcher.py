@@ -295,6 +295,7 @@ def test_fetch_all_skips_set_child_for_parent_client_when_identifier_none():
 
 # --- 02-02 spike findings: defensive fallback when Pronote omits grades ---
 
+
 class _GradesKeyErrorPeriod:
     """current_period exists but `.grades` raises KeyError.
 
@@ -316,8 +317,7 @@ class _GradesAttributeErrorPeriod:
         raise AttributeError("grades")
 
 
-def test_keyerror_on_current_period_grades_returns_empty_grades(
-):
+def test_keyerror_on_current_period_grades_returns_empty_grades():
     """02-02 spike finding: pronotepy raises KeyError('listeDevoirs') when the
     Pronote response omits the grades section. fetch_all must downgrade to
     grades=[] rather than fail the whole snapshot — lessons + information are
@@ -450,6 +450,7 @@ def test_fetch_all_set_child_does_not_leak_raw_pronote_api_error():
 # Phase 4 — _grade_from_raw class context field mapping tests
 # ---------------------------------------------------------------------------
 
+
 def test_grade_from_raw_captures_class_context():
     """_grade_from_raw maps raw.average/.max/.min/.comment to Grade class fields.
 
@@ -467,9 +468,9 @@ def test_grade_from_raw_captures_class_context():
     raw.out_of = "20"
     raw.coefficient = "2"
     raw.date = date(2026, 5, 10)
-    raw.average = "13"    # pronotepy name — maps to Grade.class_average
-    raw.max = "18"        # pronotepy name — maps to Grade.class_max
-    raw.min = "8"         # pronotepy name — maps to Grade.class_min
+    raw.average = "13"  # pronotepy name — maps to Grade.class_average
+    raw.max = "18"  # pronotepy name — maps to Grade.class_max
+    raw.min = "8"  # pronotepy name — maps to Grade.class_min
     raw.comment = "Bon travail"
 
     g = _grade_from_raw(raw)
@@ -506,6 +507,7 @@ def test_grade_from_raw_missing_class_context_defaults_to_empty():
 # ---------------------------------------------------------------------------
 # Phase 4 — fetch_all overall_average + period_name capture tests
 # ---------------------------------------------------------------------------
+
 
 class _FakePeriodWithAverage:
     """Fake period that exposes overall_average + name (Phase 4 RESEARCH gap #5)."""

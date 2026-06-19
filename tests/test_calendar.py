@@ -13,6 +13,7 @@ HA-integration tests (with hass fixture) cover:
   - range filter
   - cancelled prefix via async_get_events
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -165,9 +166,7 @@ def test_async_get_events_returns_empty_for_no_lessons() -> None:
     start = datetime(2026, 5, 10, 0, 0, tzinfo=_TZ)
     end = datetime(2026, 5, 17, 23, 59, tzinfo=_TZ)
 
-    events = asyncio.get_event_loop().run_until_complete(
-        calendar.async_get_events(MagicMock(), start, end)
-    )
+    events = asyncio.get_event_loop().run_until_complete(calendar.async_get_events(MagicMock(), start, end))
     assert events == []
 
 
@@ -271,9 +270,7 @@ async def test_calendar_entity_created(hass, mock_config_entry, mock_pronote_cli
     assert len(calendar_ids) == 1, f"Expected 1 calendar entity, got: {calendar_ids}"
 
 
-async def test_async_get_events_range_filter(
-    hass, mock_config_entry, mock_pronote_client
-) -> None:
+async def test_async_get_events_range_filter(hass, mock_config_entry, mock_pronote_client) -> None:
     """CAL-01: async_get_events returns only lessons within [start_date, end_date]."""
     today = date(2026, 5, 10)
     lesson_in = _make_lesson(today, hour=8, subject="In Range")
@@ -319,9 +316,7 @@ async def test_async_get_events_range_filter(
     assert events[0].summary == "In Range"
 
 
-async def test_cancelled_lesson_has_x_prefix(
-    hass, mock_config_entry, mock_pronote_client
-) -> None:
+async def test_cancelled_lesson_has_x_prefix(hass, mock_config_entry, mock_pronote_client) -> None:
     """CAL-02 / D-09: CalendarEvent.summary starts with ❌ for canceled lessons."""
     today = date(2026, 5, 10)
     snap = Snapshot(

@@ -92,9 +92,9 @@ class Grade:
             "coefficient": self.coefficient,
             "date": self.date.isoformat(),
             "class_average": self.class_average,  # Phase 4
-            "class_min": self.class_min,           # Phase 4
-            "class_max": self.class_max,           # Phase 4
-            "comment": self.comment,               # Phase 4
+            "class_min": self.class_min,  # Phase 4
+            "class_max": self.class_max,  # Phase 4
+            "comment": self.comment,  # Phase 4
         }
 
     @classmethod
@@ -162,7 +162,7 @@ class Snapshot:
     # fetched inside fetch_all (executor) and stored here. Sensor reads this string
     # directly; never calls Period.overall_average from native_value (PITFALL 3).
     overall_average: str = ""  # Period.overall_average comma-string e.g. "14,50"; "-1" = no grades
-    period_name: str = ""      # Period.name e.g. "Trimestre 2"
+    period_name: str = ""  # Period.name e.g. "Trimestre 2"
 
     @property
     def lessons_today(self) -> list[Lesson]:
@@ -184,7 +184,7 @@ class Snapshot:
             "grades": [grade.to_dict() for grade in self.grades],
             "information": [info.to_dict() for info in self.information],
             "overall_average": self.overall_average,  # Phase 4
-            "period_name": self.period_name,           # Phase 4
+            "period_name": self.period_name,  # Phase 4
         }
 
     @classmethod

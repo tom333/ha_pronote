@@ -374,7 +374,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
                 return default
             try:
                 return timedelta(minutes=int(raw))
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 _LOGGER.warning(
                     "Phase 5 _resolve_options: malformed option %s=%r; falling back to %s",
                     key,
@@ -389,7 +389,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
                 return default
             try:
                 return datetime_time.fromisoformat(str(raw))
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 _LOGGER.warning(
                     "Phase 5 _resolve_options: malformed option %s=%r; falling back to %s",
                     key,

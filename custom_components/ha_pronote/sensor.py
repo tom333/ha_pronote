@@ -53,11 +53,13 @@ async def async_setup_entry(
 ) -> None:
     """Forward platform setup — Phase 4 wires 3 sensors."""
     coordinator: PronoteDataUpdateCoordinator = entry.runtime_data.coordinator
-    async_add_entities([
-        PronoteLessonsTodaySensor(coordinator, entry),
-        PronoteGradesSensor(coordinator, entry),        # Phase 4 — GRADE-01/02
-        PronoteNotificationsSensor(coordinator, entry),  # Phase 4 — NOTIF-01/02
-    ])
+    async_add_entities(
+        [
+            PronoteLessonsTodaySensor(coordinator, entry),
+            PronoteGradesSensor(coordinator, entry),  # Phase 4 — GRADE-01/02
+            PronoteNotificationsSensor(coordinator, entry),  # Phase 4 — NOTIF-01/02
+        ]
+    )
 
 
 class PronoteLessonsTodaySensor(PronoteEntity, SensorEntity):
@@ -95,12 +97,10 @@ class PronoteLessonsTodaySensor(PronoteEntity, SensorEntity):
         """
         return {
             "lessons_today": [
-                lesson.to_dict()
-                for lesson in sorted(self.coordinator.data.lessons_today, key=lambda l: l.start)
+                lesson.to_dict() for lesson in sorted(self.coordinator.data.lessons_today, key=lambda l: l.start)
             ],
             "lessons_tomorrow": [
-                lesson.to_dict()
-                for lesson in sorted(self.coordinator.data.lessons_tomorrow, key=lambda l: l.start)
+                lesson.to_dict() for lesson in sorted(self.coordinator.data.lessons_tomorrow, key=lambda l: l.start)
             ],
         }
 

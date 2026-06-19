@@ -852,20 +852,24 @@ async def test_notifications_title_none_serialised_as_empty_string(
 # unique_id and entity_id stay frozen (ENT-02). The strip + empty-as-None
 # semantics are tested across the truthy / empty / whitespace / None cases.
 
+
 @pytest.mark.parametrize(
     ("nickname_value", "expected_device_name"),
     [
-        (None, "Jean Dupont"),                # missing → fallback to child_name
-        ("", "Jean Dupont"),                  # empty → fallback
-        ("   ", "Jean Dupont"),               # whitespace-only → fallback
-        ("Jeannot", "Jeannot"),               # truthy → nickname wins
-        ("   Jeannot   ", "Jeannot"),         # strip applied → nickname wins
+        (None, "Jean Dupont"),  # missing → fallback to child_name
+        ("", "Jean Dupont"),  # empty → fallback
+        ("   ", "Jean Dupont"),  # whitespace-only → fallback
+        ("Jeannot", "Jeannot"),  # truthy → nickname wins
+        ("   Jeannot   ", "Jeannot"),  # strip applied → nickname wins
     ],
     ids=["none", "empty", "whitespace", "truthy", "stripped"],
 )
 async def test_device_info_nickname_fallback(
-    hass, mock_pronote_client, snapshot_with_n_lessons_today,
-    nickname_value, expected_device_name,
+    hass,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+    nickname_value,
+    expected_device_name,
 ) -> None:
     """OPT-03 / D-13 / D-14: DeviceInfo.name = nickname (stripped) OR entry.data['child_name']."""
     from datetime import date
@@ -908,6 +912,7 @@ async def test_device_info_nickname_fallback(
     # Read the device from the device registry. The integration creates ONE
     # device per child via DeviceInfo(identifiers={(DOMAIN, child_identifier)}).
     from homeassistant.helpers import device_registry as dr
+
     registry = dr.async_get(hass)
     device = registry.async_get_device(identifiers={(DOMAIN, "jean_dupont")})
     assert device is not None

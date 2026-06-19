@@ -9,6 +9,7 @@ CalendarEntity.state and state_attributes are @final — never override them.
 HA base class sets _entity_component_unrecorded_attributes = frozenset({"description"})
 so the teacher name in description is NOT stored by recorder (T-04-3 mitigation).
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -54,9 +55,7 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
     ) -> None:
         """D-07 — unique_id = pronote_{child_identifier}_calendar."""
         super().__init__(coordinator, entry)
-        self._attr_unique_id = (
-            f"pronote_{entry.runtime_data.child_identifier}_calendar"
-        )
+        self._attr_unique_id = f"pronote_{entry.runtime_data.child_identifier}_calendar"
 
     @property
     def event(self) -> CalendarEvent | None:
@@ -110,10 +109,7 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
         # T-04-06c guard: degenerate Pronote data where end <= start (Pitfall 6)
         end = lesson.end if lesson.end > lesson.start else lesson.start + timedelta(hours=1)
 
-        uid = (
-            f"pronote_{child_id}_{lesson.date}_{lesson.start.isoformat()}"
-            f"_{slugify(subject)}"
-        )
+        uid = f"pronote_{child_id}_{lesson.date}_{lesson.start.isoformat()}_{slugify(subject)}"
         return CalendarEvent(
             summary=summary,
             start=lesson.start,

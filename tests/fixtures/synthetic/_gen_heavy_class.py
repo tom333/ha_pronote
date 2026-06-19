@@ -6,6 +6,7 @@ Committed output: tests/fixtures/synthetic/heavy_class.json
 Parameters: ~126 lessons (3wk x 6d x 7), 100 grades, 30 informations.
 Anchor: today = date(2026, 5, 26) so J-7 = May 19, J+14 = June 9.
 """
+
 from __future__ import annotations
 
 import json

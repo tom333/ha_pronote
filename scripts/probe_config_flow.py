@@ -116,6 +116,7 @@ def main() -> int:
             print("OK")
         except Exception as e:  # noqa: BLE001
             import traceback
+
             print(f"FAILED: {type(e).__name__}: {e}")
             traceback.print_exc()
         print()
@@ -172,6 +173,7 @@ def main() -> int:
         print(f"REPRODUCED TypeError: {e}")
     except Exception as e:  # noqa: BLE001
         import traceback
+
         print(f"OTHER: {type(e).__name__}: {e}")
         traceback.print_exc()
     print()
@@ -183,6 +185,7 @@ def main() -> int:
             print(f"OK — resumed: {type(resumed).__name__}")
     except Exception as e:  # noqa: BLE001
         import traceback
+
         print(f"FAILED: {type(e).__name__}: {e}")
         traceback.print_exc()
     print()
@@ -194,6 +197,7 @@ def main() -> int:
             print(f"OK — resumed: {type(resumed).__name__}, logged_in={getattr(resumed, 'logged_in', '?')}")
     except Exception as e:  # noqa: BLE001
         import traceback
+
         print(f"FAILED: {type(e).__name__}: {e}")
         traceback.print_exc()
     print()
@@ -251,6 +255,7 @@ def main() -> int:
                 print(f"  {attr}: {values}")
     except Exception as e:  # noqa: BLE001
         import traceback
+
         print(f"FAILED: {type(e).__name__}: {e}")
         traceback.print_exc()
     print()
@@ -274,6 +279,7 @@ def main() -> int:
             print("(this matches 02-02 spike finding — handle as 'no grades available')")
     except Exception as e:  # noqa: BLE001
         import traceback
+
         print(f"FAILED: {type(e).__name__}: {e}")
         traceback.print_exc()
     print()
@@ -291,6 +297,7 @@ def main() -> int:
             print(f"--- read/unread distribution: {len(infos) - unread} read / {unread} unread ---")
     except Exception as e:  # noqa: BLE001
         import traceback
+
         print(f"FAILED: {type(e).__name__}: {e}")
         traceback.print_exc()
     print()
@@ -316,6 +323,7 @@ def main() -> int:
             print(json.dumps(_summarise(periods[0], max_attrs=15), indent=2, default=str))
     except Exception as e:  # noqa: BLE001
         import traceback
+
         print(f"FAILED: {type(e).__name__}: {e}")
         traceback.print_exc()
     print()
@@ -329,20 +337,34 @@ def main() -> int:
         lessons = list(client.lessons(date_from=j_minus_7, date_to=j_plus_14))
         if lessons:
             sample = lessons[0]
-            candidate_signals = [a for a in dir(sample) if a in {
-                "canceled", "cancelled", "status", "outing", "exempted",
-                "test", "detention", "memo", "background_color",
-            }]
+            candidate_signals = [
+                a
+                for a in dir(sample)
+                if a
+                in {
+                    "canceled",
+                    "cancelled",
+                    "status",
+                    "outing",
+                    "exempted",
+                    "test",
+                    "detention",
+                    "memo",
+                    "background_color",
+                }
+            ]
             print(f"candidate signal attrs on Lesson: {candidate_signals}")
             print()
             # Distribution
             for attr in candidate_signals:
                 vals = [str(getattr(ls, attr, None))[:30] for ls in lessons]
                 from collections import Counter
+
                 dist = Counter(vals).most_common(5)
                 print(f"  {attr}: top values {dist}")
     except Exception as e:  # noqa: BLE001
         import traceback
+
         print(f"FAILED: {type(e).__name__}: {e}")
         traceback.print_exc()
     print()

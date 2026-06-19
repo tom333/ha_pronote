@@ -115,9 +115,8 @@ async def test_unload_entry_shuts_down_coordinator(hass, mock_config_entry, mock
 # does NOT wrap exceptions — per user feedback memory feedback_no_silent_exceptions.md,
 # ZoneInfoNotFoundError propagates raw.
 
-async def test_async_setup_entry_school_tz_override_takes_effect(
-    hass, mock_pronote_client
-) -> None:
+
+async def test_async_setup_entry_school_tz_override_takes_effect(hass, mock_pronote_client) -> None:
     """OPT-04 / D-09 — entry.options['school_tz']='Europe/Paris' reaches the coordinator."""
     from zoneinfo import ZoneInfo
 
@@ -150,9 +149,7 @@ async def test_async_setup_entry_school_tz_override_takes_effect(
     assert entry.runtime_data.school_tz == ZoneInfo("Europe/Paris")
 
 
-async def test_async_setup_entry_school_tz_invalid_raises_zoneinfo_error(
-    hass, mock_pronote_client
-) -> None:
+async def test_async_setup_entry_school_tz_invalid_raises_zoneinfo_error(hass, mock_pronote_client) -> None:
     """OPT-04 — corrupted school_tz: ZoneInfoNotFoundError propagates RAW.
 
     Per user feedback memory feedback_no_silent_exceptions.md, we do NOT wrap

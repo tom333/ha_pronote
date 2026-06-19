@@ -180,6 +180,7 @@ def test_lesson_to_dict_is_json_serializable():
 # Phase 4 — Grade extension tests (class_average, class_min, class_max, comment)
 # ---------------------------------------------------------------------------
 
+
 def test_grade_backward_compat_no_new_fields():
     """Existing 5-field construction still works (backward compat)."""
     g = Grade(subject="Math", value="15", out_of="20", coefficient="1", date=date(2026, 5, 10))
@@ -246,6 +247,7 @@ def test_grade_to_dict_includes_all_9_fields():
 # ---------------------------------------------------------------------------
 # Phase 4 — Snapshot extension tests (overall_average, period_name)
 # ---------------------------------------------------------------------------
+
 
 def test_snapshot_overall_average_default():
     """Snapshot with no overall_average arg defaults to empty string."""

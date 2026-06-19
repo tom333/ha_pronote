@@ -88,10 +88,7 @@ class PronoteEntity(CoordinatorEntity["PronoteDataUpdateCoordinator"]):
         # unstripped value in entry.options; the .strip() here is belt-and-braces.
         # Empty-post-strip → None → fall through to entry.data["child_name"]
         # (Phase 3 D-08).
-        display_name = (
-            (self._entry.options.get("nickname") or "").strip()
-            or self._entry.data["child_name"]
-        )
+        display_name = (self._entry.options.get("nickname") or "").strip() or self._entry.data["child_name"]
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry.runtime_data.child_identifier)},
             name=display_name,

@@ -90,9 +90,7 @@ def _load_replacements_file(path: Path) -> dict[str, str]:
     except (OSError, json.JSONDecodeError) as err:
         print(f"warning: could not parse {path}: {err}", file=sys.stderr)
         return {}
-    if not isinstance(loaded, dict) or not all(
-        isinstance(k, str) and isinstance(v, str) for k, v in loaded.items()
-    ):
+    if not isinstance(loaded, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in loaded.items()):
         print(
             f"warning: {path} must be a flat string-to-string JSON object — ignored",
             file=sys.stderr,

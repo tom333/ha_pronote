@@ -67,24 +67,18 @@ async def test_sensor_within_ha_size_limits(
     # Find the matching sensor entity by entity_id fragment
     all_sensor_ids = hass.states.async_entity_ids("sensor")
     matching = [eid for eid in all_sensor_ids if entity_id_fragment in eid]
-    assert len(matching) >= 1, (
-        f"No sensor entity with '{entity_id_fragment}' in id. "
-        f"Found: {all_sensor_ids}"
-    )
+    assert len(matching) >= 1, f"No sensor entity with '{entity_id_fragment}' in id. Found: {all_sensor_ids}"
     entity_state = hass.states.get(matching[0])
     assert entity_state is not None
 
     # Assertion 1: state is not unknown/unavailable (D-17)
     assert entity_state.state not in (None, "unknown", "unavailable"), (
-        f"{sensor_cls.__name__} state is {entity_state.state!r} on heavy_class fixture. "
-        f"Entity id: {matching[0]}"
+        f"{sensor_cls.__name__} state is {entity_state.state!r} on heavy_class fixture. Entity id: {matching[0]}"
     )
 
     # Assertion 2: state string length <= 255 chars (HA state machine limit)
     state_len = len(str(entity_state.state))
-    assert state_len <= MAX_STATE_CHARS, (
-        f"{sensor_cls.__name__} state len = {state_len} > {MAX_STATE_CHARS}"
-    )
+    assert state_len <= MAX_STATE_CHARS, f"{sensor_cls.__name__} state len = {state_len} > {MAX_STATE_CHARS}"
 
     # Assertion 3: attributes JSON byte size <= 16384 bytes (HA recorder limit)
     # Use default=str to handle dates/datetimes exactly as HA recorder would.
@@ -126,8 +120,7 @@ def test_calendar_event_size_pure_python(heavy_class_snapshot) -> None:
         event = cal._lesson_to_event(lesson)  # noqa: SLF001
 
         assert len(event.summary) <= MAX_STATE_CHARS, (
-            f"CalendarEvent.summary too long ({len(event.summary)} chars): "
-            f"{event.summary[:60]!r}"
+            f"CalendarEvent.summary too long ({len(event.summary)} chars): {event.summary[:60]!r}"
         )
         if event.description:
             assert len(event.description) <= 1024, (
@@ -135,8 +128,7 @@ def test_calendar_event_size_pure_python(heavy_class_snapshot) -> None:
             )
         if event.location:
             assert len(event.location) <= MAX_STATE_CHARS, (
-                f"CalendarEvent.location too long ({len(event.location)} chars): "
-                f"{event.location[:60]!r}"
+                f"CalendarEvent.location too long ({len(event.location)} chars): {event.location[:60]!r}"
             )
 
 
@@ -167,7 +159,5 @@ async def test_calendar_events_within_limits_integration(
         await hass.async_block_till_done()
 
     calendar_ids = hass.states.async_entity_ids("calendar")
-    assert len(calendar_ids) >= 1, (
-        f"No calendar entity registered. States: {list(hass.states.async_entity_ids())}"
-    )
+    assert len(calendar_ids) >= 1, f"No calendar entity registered. States: {list(hass.states.async_entity_ids())}"
     # Further deep-dive via entity_components is a best-effort complement only.
