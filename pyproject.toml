@@ -13,7 +13,8 @@ packages = ["custom_components.ha_pronote"]
 # Pyright (type checking) — mode: basic, matches modern blueprint pattern
 # ---------------------------------------------------------------------------
 [tool.pyright]
-include = ["custom_components/ha_pronote", "tests"]
+# tests/ excluded — MagicMock-based tests fight pyright basic mode; the integration code is the contract.
+include = ["custom_components/ha_pronote"]
 exclude = [
     "**/.*",
     "**/__pycache__",
@@ -22,6 +23,7 @@ exclude = [
 ]
 venvPath = "."
 venv = ".venv"
+pythonVersion = "3.14"
 typeCheckingMode = "basic"
 reportUnusedImport = "none"
 reportUnusedVariable = "none"

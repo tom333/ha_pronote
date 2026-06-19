@@ -5,7 +5,7 @@ Caller (Phase 3 coordinator) wraps each call in ``hass.async_add_executor_job(pa
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 import uuid as uuid_lib
 
 import pronotepy
@@ -196,9 +196,9 @@ def set_active_child(client: pronotepy.ParentClient, child_ref: object) -> None:
         # Let an IndexError propagate raw if the index is out of range —
         # that's a caller bug (entry.data has stale child_index), not a
         # pronotepy condition we need to wrap.
-        child_ref = client.children[child_ref]
+        child_ref = cast("pronotepy.ClientInfo", client.children[child_ref])
     try:
-        client.set_child(child_ref)
+        client.set_child(cast("pronotepy.ClientInfo", child_ref))
     except pronotepy.exceptions.CryptoError as err:
         raise AuthError(redact(str(err))) from err
     except pronotepy.PronoteAPIError as err:

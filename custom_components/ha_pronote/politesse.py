@@ -41,6 +41,7 @@ import random
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
+    from types import ModuleType
     from zoneinfo import ZoneInfo
 
 
@@ -287,7 +288,7 @@ def compute_interval(
     now: datetime,
     options: PolitesseOptions,
     *,
-    rng: random.Random | random = random,
+    rng: random.Random | ModuleType = random,
 ) -> timedelta:
     """D-04 — Return the next polling interval given ``now`` + resolved options.
 

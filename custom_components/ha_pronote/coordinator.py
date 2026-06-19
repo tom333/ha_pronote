@@ -38,7 +38,7 @@ from __future__ import annotations
 from datetime import datetime, time as datetime_time, timedelta
 from functools import partial
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import issue_registry as ir  # Phase 7 DIAG-02/03
@@ -263,7 +263,9 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             # mapping so a CryptoError on this call surfaces as AuthError (caught
             # by the existing except arm below) instead of leaking pronotepy.
             if self._child_index is not None and hasattr(new_client, "set_child"):
-                await self.hass.async_add_executor_job(set_active_child, new_client, self._child_index)
+                await self.hass.async_add_executor_job(
+                    partial(set_active_child, cast("pronotepy.ParentClient", new_client), self._child_index)
+                )
             self._client = new_client
             snapshot = await self.hass.async_add_executor_job(
                 partial(
@@ -344,6 +346,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             )
             return
 
+        assert self.config_entry is not None
         child_context = {
             "child_id": self._child_identifier,  # D-11 — frozen slug
             "child_name": self.config_entry.data["child_name"],  # D-11 — display name

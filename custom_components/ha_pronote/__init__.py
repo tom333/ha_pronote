@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from functools import partial
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from zoneinfo import ZoneInfo
 
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -31,6 +31,8 @@ from .data import PronoteConfigEntry, PronoteData
 from .holiday_dates import compute_holiday_dates_for_year  # Phase 5 WR-2 — neutral HA-free helper
 
 if TYPE_CHECKING:
+    import pronotepy
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -100,7 +102,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> b
     child_index = entry.data.get("child_index")
     if child_index is not None and hasattr(client, "set_child"):
         try:
-            await hass.async_add_executor_job(set_active_child, client, child_index)
+            await hass.async_add_executor_job(
+                partial(set_active_child, cast("pronotepy.ParentClient", client), child_index)
+            )
         except AuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except PronoteIntegrationError as err:
