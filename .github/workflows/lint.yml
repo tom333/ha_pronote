@@ -53,4 +53,6 @@ jobs:
         with:
           python-version: "3.14"
       - run: pip install codespell==2.4.1
-      - run: codespell --ignore-words-list=hass --quiet-level=2 --skip="*.json,./.git,./node_modules"
+      # French integration: skip French prose (*.md) and allow French terms that
+      # collide with the English typo dictionary (correspondance, informations).
+      - run: codespell --ignore-words-list=hass,correspondance,informations --quiet-level=2 --skip="*.json,*.md,./.git,./node_modules"
