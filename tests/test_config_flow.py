@@ -33,6 +33,35 @@ from homeassistant.config_entries import OptionsFlowWithReload
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import TextSelector, TextSelectorType
 
+
+@pytest.fixture(autouse=True)
+def _mock_setup_seam(mock_pronote_client):
+    """Keep the integration's real setup seam off pronotepy for every flow test.
+
+    A successful reauth/reconfigure ends in ``async_update_reload_and_abort``
+    and ``async_step_user`` ends in ``create_entry`` — both schedule a real
+    entry setup, whose ``async_setup_entry`` calls the production
+    ``build_or_resume_client`` (imported into the package namespace). The flow
+    tests only patch the *config_flow* seam, so that reload/post-create setup
+    escapes to real pronotepy and opens a live network socket. PHACC's socket
+    guard catches it only when the call reaches ``socket.socket`` rather than
+    raising earlier in ``getaddrinfo`` — which is DNS/timing-dependent, hence
+    the flaky CI-only failure (e.g. teardown of
+    ``test_two_children_reauth_a_does_not_affect_b``).
+
+    Patching the ``__init__`` seam module-wide keeps every flow test's
+    incidental setup on the mock client. Tests that assert on setup itself
+    (e.g. ``test_two_children_two_distinct_coordinators_after_setup``) re-patch
+    this exact target inside their own ``with`` block, transparently overriding
+    this default for their scope.
+    """
+    with patch(
+        "custom_components.ha_pronote.build_or_resume_client",
+        return_value=mock_pronote_client,
+    ):
+        yield
+
+
 _USER_INPUT_ELEVE = {
     "url": "https://example.com/pronote/eleve.html",
     "account_type": "eleve",
