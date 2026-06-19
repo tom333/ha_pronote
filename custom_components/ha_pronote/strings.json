@@ -10,7 +10,7 @@
           "password": "Mot de passe"
         },
         "data_description": {
-          "url": "URL complète de votre espace Pronote (ex : https://0123456a.index-education.net/pronote/eleve.html).",
+          "url": "URL complète de votre espace Pronote, telle qu'elle apparaît dans la barre d'adresse de votre navigateur sur la page de connexion.",
           "account_type": "'eleve' pour le compte élève, 'parent' pour le portail parent."
         }
       },
@@ -106,7 +106,6 @@
     },
     "auth_circuit": {
       "title": "Pronote a rejeté vos identifiants",
-      "description": "L'authentification a échoué plusieurs fois (tentative N°{strike_count}). Prochaine tentative à {retry_at}. Si votre mot de passe Pronote a changé, ré-authentifiez-vous. Détail technique : {detail}. Aide : {help_url}",
       "fix_flow": {
         "step": {
           "confirm": {
