@@ -29,14 +29,16 @@ Remaining work toward v0.1.0 HACS release. Historical phase artifacts archived u
 
 ### Items
 
-- [ ] **DIAG-01** — `async_get_config_entry_diagnostics` with `async_redact_data` for password, uuid, token, establishment URL
-- [ ] **DIAG-02** — Repair Issue on IP-ban (title, description, FAQ link)
-- [ ] **DIAG-03** — Repair Issue on repeated auth failure (button → reauth flow)
-- [ ] **I18N-01** — `strings.json` + `translations/fr.json` exhaustive sweep (config, options, errors, sensors, repair)
-- [ ] **I18N-02** — `translations/en.json` mirror
-- [ ] **DIST-04** — Daily GitHub Actions: install `pronotepy@main`, run tests, open issue on failure
-- [ ] **DIST-07** — README: HACS install, config UI, ApexCharts attribute schema, automation YAML examples, polling rationale
-- [ ] **DIST-09** — Release workflow: tag → zip `custom_components/ha_pronote/` as release artifact
+- [x] **DIAG-01** — `async_get_config_entry_diagnostics` with `async_redact_data` for password, uuid, token, establishment URL
+- [x] **DIAG-02** — Repair Issue on IP-ban (title, description, FAQ link)
+- [x] **DIAG-03** — Repair Issue on repeated auth failure (button → reauth flow)
+- [x] **I18N-01** — `strings.json` + `translations/fr.json` exhaustive sweep (config, options, errors, sensors, repair)
+- [x] **I18N-02** — `translations/en.json` — now holds **French** (runtime fallback); project is French-only, no international version
+- [x] **DIST-04** — Daily GitHub Actions canary: install `pronotepy@HEAD`, run full suite, open deduplicated issue on failure (`.github/workflows/upstream-canary.yml`)
+- [x] **DIST-07** — README rewritten in French: HACS install, config UI, attribute schema, automation YAML, polling rationale
+- [x] **DIST-09** — Release workflow verified: tag → `release: published` → `ha_pronote.zip` (built from `custom_components/ha_pronote/`, includes diagnostics/repairs/translations, no cruft) → HACS consumes `filename`. Already implemented; verified 2026-06-13, no changes needed.
+
+**CI fix (prerequisite, discovered during Distribution planning):** `test.yml` had never passed — `pytest-homeassistant-custom-component==0.13.326` required `homeassistant==2026.5.0b0`, conflicting with the pinned `2026.4.4`, and runtime deps (`pronotepy`/`python-slugify`/`holidays`) were absent from the test install. Fixed: PHACC pinned to `0.13.325` + runtime deps mirrored into `requirements_test.txt`.
 
 ## v2 / Deferred
 
