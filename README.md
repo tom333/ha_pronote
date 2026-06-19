@@ -100,8 +100,8 @@ Trois événements sont émis sur le bus Home Assistant. Chacun porte un context
 | Événement | Émis quand | Champs spécifiques |
 |-----------|-----------|--------------------|
 | `pronote_schedule_changed` | un cours d'aujourd'hui ou demain est ajouté / annulé / modifié | `change_type`, `day`, `lesson_date`, `subject`, `before`, `after` |
-| `pronote_new_grade` | une nouvelle note apparaît | champs de la note (cf. schéma `grades`) |
-| `pronote_new_information` | une nouvelle information arrive | champs de l'information (cf. schéma `informations`) |
+| `pronote_new_grade` | une nouvelle note apparaît | `subject`, `value`, `out_of`, `coefficient`, `date` |
+| `pronote_new_information` | une nouvelle information arrive | `info_id`, `title`, `sender`, `date`, `excerpt` |
 
 ### Exemple : notification mobile sur changement d'emploi du temps
 
