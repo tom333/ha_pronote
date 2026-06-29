@@ -191,6 +191,25 @@ def test_pronote_api_error_during_lessons_raises_communication_error():
     assert excinfo.value.reason == ErrorReason.PROTOCOL_BROKEN
 
 
+def test_expired_session_during_lessons_raises_session_expired():
+    """ "La page a expiré" -> CommunicationError(SESSION_EXPIRED) so the coordinator
+    rebuilds the client via silent recovery instead of failing every poll until
+    a manual reload (which would silently stop all schedule-change events)."""
+
+    class _ErrClient:
+        current_period: ClassVar = _FakePeriod([])
+
+        def information_and_surveys(self) -> list:
+            return []
+
+        def lessons(self, date_from: date, date_to: date) -> list:
+            raise pronotepy.PronoteAPIError("Unknown error from pronote: 20 | La page a expiré ! (11)")
+
+    with pytest.raises(CommunicationError) as excinfo:
+        fetch_all(_ErrClient(), today=date(2026, 5, 4), school_tz=NOUMEA)
+    assert excinfo.value.reason == ErrorReason.SESSION_EXPIRED
+
+
 def test_os_error_during_lessons_raises_communication_error_server_down():
     class _ErrClient:
         current_period: ClassVar = _FakePeriod([])

@@ -175,29 +175,8 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
                 )
             )
         except AuthError as err:
-            # D-09 — silent recovery: try ONE fresh re-login + retry the fetch.
-            # WR-04: gate the recovery behind a 5-minute cooldown. Pitfall 2
-            # acknowledges the AuthError <-> RateLimitedError overlap (a soft
-            # rate-limit can come back as a junk auth response decoded by
-            # pronotepy as a CryptoError); without the gate, an aliased
-            # exception loop would issue a second login HTTP request to the
-            # same banned IP every 30 minutes, extending the suspension and
-            # violating CLAUDE.md "politesse polling".
-            now = dt_util.utcnow()
-            if self._last_recovery_at is not None and now - self._last_recovery_at < _SILENT_RECOVERY_COOLDOWN:
-                raise UpdateFailed(
-                    f"[{err.reason}] auth recovery rate-limited; skipping this poll: {redact(err.message)}"
-                ) from err
-            self._last_recovery_at = now
-            snapshot = await self._recover_from_auth_error(err, today)
-            # WR-09: a successful recovery PROVES the AuthError was real auth
-            # (not the aliased soft-rate-limit Pitfall 2 hedges against), so
-            # clear the cooldown — a subsequent genuine auth failure must be
-            # free to trigger ConfigEntryAuthFailed instead of being swallowed
-            # by the 5-minute window. If _recover_from_auth_error raises, this
-            # line is skipped and the timestamp set above remains in place to
-            # block the next aliased-loop attempt (the WR-04 contract).
-            self._last_recovery_at = None
+            # D-09 — silent recovery: ONE cooldown-gated fresh re-login + retry.
+            snapshot = await self._silent_recovery_or_raise(err, today)
         except RateLimitedError as err:
             # Phase 5 — D-13: breaker tick on IP_SUSPENDED only; other rate-limit reasons stay transient.
             if err.reason == ErrorReason.IP_SUSPENDED:
@@ -205,7 +184,14 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
             # D-22 — IP_SUSPENDED -> UpdateFailed; Phase 5 ALSO reads .reason for backoff above.
             raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05
         except (CommunicationError, PronoteIntegrationError) as err:
-            raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05
+            if err.reason == ErrorReason.SESSION_EXPIRED:
+                # "La page a expiré" — expired Pronote session. Same remedy as an
+                # AuthError: rebuild the client via a fresh login. Without this,
+                # every poll fails until a manual reload and all schedule-change
+                # events (notifications) stop silently.
+                snapshot = await self._silent_recovery_or_raise(err, today)
+            else:
+                raise UpdateFailed(f"[{err.reason}] {redact(err.message)}") from err  # WR-05
 
         # CR-03: state updates BEFORE side-effects that may fail. The previous
         # ordering (capture-session first, _previous_snapshot last) discarded a
@@ -236,9 +222,30 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator["Snapshot"]):
         self.update_interval = compute_interval(now_full, options)
         return snapshot
 
+    async def _silent_recovery_or_raise(self, err: PronoteIntegrationError, today: date) -> Snapshot:
+        """WR-04 cooldown-gated single fresh-login recovery.
+
+        Shared by the AuthError path (D-09) and the SESSION_EXPIRED path — both
+        mean the live client is dead and one fresh login may revive it. Within
+        the 5-minute cooldown a repeat failure short-circuits to UpdateFailed
+        (anti aliased-loop, WR-04). On success the cooldown clears (WR-09) so a
+        later genuine auth failure is free to escalate. ``_recover_from_auth_error``
+        owns the terminal mapping: a real retry AuthError -> ConfigEntryAuthFailed
+        (reauth); RateLimited / Communication -> UpdateFailed (retry next poll).
+        """
+        now = dt_util.utcnow()
+        if self._last_recovery_at is not None and now - self._last_recovery_at < _SILENT_RECOVERY_COOLDOWN:
+            raise UpdateFailed(
+                f"[{err.reason}] auth recovery rate-limited; skipping this poll: {redact(err.message)}"
+            ) from err
+        self._last_recovery_at = now
+        snapshot = await self._recover_from_auth_error(err, today)
+        self._last_recovery_at = None
+        return snapshot
+
     async def _recover_from_auth_error(
         self,
-        original_err: AuthError,
+        original_err: PronoteIntegrationError,
         today: date,
     ) -> Snapshot:
         """D-09: single fresh re-login + retry; on second failure raise ConfigEntryAuthFailed."""

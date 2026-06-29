@@ -102,10 +102,14 @@ def fetch_all(
             period_name = ""
         raw_info = list(client.information_and_surveys())
     except pronotepy.PronoteAPIError as err:
-        raise CommunicationError(
-            str(err),
-            reason=ErrorReason.PROTOCOL_BROKEN,
-        ) from err
+        msg = str(err)
+        # "La page a expiré" — Pronote signals an expired session. It is
+        # recoverable with a fresh login, so tag it SESSION_EXPIRED and let the
+        # coordinator's silent-recovery path rebuild the client, instead of
+        # failing every poll (PROTOCOL_BROKEN -> UpdateFailed) until a manual
+        # reload — which would silently stop all schedule-change events.
+        reason = ErrorReason.SESSION_EXPIRED if "page a expir" in msg.lower() else ErrorReason.PROTOCOL_BROKEN
+        raise CommunicationError(msg, reason=reason) from err
     except OSError as err:
         raise CommunicationError(str(err)) from err
 

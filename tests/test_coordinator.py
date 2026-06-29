@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo as _ZoneInfo
 
 import pytest
 
-from custom_components.ha_pronote.api import AuthError, CommunicationError, RateLimitedError
+from custom_components.ha_pronote.api import AuthError, CommunicationError, ErrorReason, RateLimitedError
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -385,6 +385,45 @@ async def test_recovery_network_error_raises_update_failed(
         pytest.raises(UpdateFailed),
     ):
         await coordinator._async_update_data()  # noqa: SLF001
+
+
+async def test_session_expired_triggers_silent_recovery(
+    hass,
+    mock_config_entry,
+    mock_pronote_client,
+    snapshot_with_n_lessons_today,
+) -> None:
+    """Bug fix: a SESSION_EXPIRED CommunicationError ("La page a expiré") must
+    rebuild the client via a fresh login and return the recovered snapshot — NOT
+    fail every poll until a manual reload (which silently stops all events)."""
+    today = date(2026, 5, 7)
+    coordinator = await _setup_coordinator(
+        hass, mock_config_entry, mock_pronote_client, snapshot_with_n_lessons_today(today, n=1), today
+    )
+
+    recovered = snapshot_with_n_lessons_today(today, n=2)
+    fresh_client = MagicMock()
+    fresh_client.set_child = MagicMock()
+    fresh_client.export_credentials = MagicMock(return_value={"token": "x"})
+
+    with (
+        patch(
+            "custom_components.ha_pronote.coordinator.fetch_all",
+            side_effect=[
+                CommunicationError("La page a expiré", reason=ErrorReason.SESSION_EXPIRED),
+                recovered,
+            ],
+        ),
+        patch(
+            "custom_components.ha_pronote.coordinator.build_or_resume_client",
+            return_value=fresh_client,
+        ) as mock_build,
+    ):
+        result = await coordinator._async_update_data()  # noqa: SLF001
+
+    assert result is recovered
+    assert coordinator._client is fresh_client  # noqa: SLF001
+    mock_build.assert_called_once()
 
 
 async def test_recovery_auth_failed_again_raises_config_entry_auth_failed(
